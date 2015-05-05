@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -e
+
+GO="godep go"
+
+ORG_PATH="github.com/glerchundi"
+REPO_PATH="${ORG_PATH}/kubelistener"
+
+echo "Building kubelistener..."
+CGO_ENABLED=0 $GO build -a -installsuffix cgo -ldflags '-s' -o bin/kubelistener ${REPO_PATH}
+
