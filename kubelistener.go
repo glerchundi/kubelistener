@@ -8,8 +8,8 @@ import (
     "encoding/json"
     "fmt"
     "strconv"
-    "time"
     "os"
+    "time"
 
     "github.com/glerchundi/kubelistener/log"
     "github.com/glerchundi/kubelistener/resource"
@@ -24,8 +24,21 @@ import (
 )
 
 type Event struct {
-    Type   kwatch.EventType `json:"type,omitempty"`
-    Object interface{}      `json:"object,omitempty"`
+    Type   int         `json:"type,omitempty"`
+    Object interface{} `json:"object,omitempty"`
+}
+
+func NewEvent(eventType kwatch.EventType, object interface{}) Event {
+    var t int = -1
+    switch eventType {
+    case kwatch.Added:
+        t = 0
+    case kwatch.Modified:
+        t = 1
+    case kwatch.Deleted:
+        t = 2
+    }
+    return Event{t,object}
 }
 
 type RunConfig struct {
@@ -123,7 +136,7 @@ func mainLoop(resources resource.Resources, selector klabels.Selector, syncInter
 
         // marshal list of events
         for _, i := range rl {
-            marshalAndPrint(Event{eventType, i})
+            marshalAndPrint(NewEvent(eventType, i))
         }
     }
 
@@ -161,7 +174,7 @@ func mainLoop(resources resource.Resources, selector klabels.Selector, syncInter
             }
 
             // marshal and print to stdout
-            marshalAndPrint(Event{event.Type,event.Object})
+            marshalAndPrint(NewEvent(event.Type, event.Object))
         }
     }
 }
