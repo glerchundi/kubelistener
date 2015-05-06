@@ -66,8 +66,7 @@ func Run(cfg RunConfig) {
     switch cfg.Resource {
     case "pods":
         resources = resource.NewPodResources(kubeClient.Pods(kapi.NamespaceAll))
-    case "replicationcontrollers":
-    case "rc":
+    case "replicationcontrollers", "rc":
         resources = resource.NewReplicationControllerResources(kubeClient.ReplicationControllers(kapi.NamespaceAll))
     case "services":
         resources = resource.NewServiceResources(kubeClient.Services(kapi.NamespaceAll))
