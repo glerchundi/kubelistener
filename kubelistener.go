@@ -24,8 +24,8 @@ import (
 )
 
 type Event struct {
-    Type   int         `json:"type,omitempty"`
-    Object interface{} `json:"object,omitempty"`
+    Type   int         `json:"type"`
+    Object interface{} `json:"object"`
 }
 
 func NewEvent(eventType kwatch.EventType, object interface{}) Event {
