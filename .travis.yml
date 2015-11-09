@@ -1,0 +1,19 @@
+language: go
+go:
+  - 1.5
+  - tip
+script:
+  - make
+deploy:
+  provider: releases
+  skip_cleanup: true
+  api_key:
+      secure: "IuKabs0R6q3BhvVKtj9JRWIdIPPOluWA7gnbspmMbE1a2jW+2QMkDYsEGZxu9dnb4olj6EHXh6uAozuLU00ijALPbQFkVxb6fn7ZPAje5PafNLuxykkRq5aKmPfyGlqo/obKLmbtEEZuWbyvThXcIFfVOxhfw72nkPWsPUn4ot8="
+  file:
+    - ${TRAVIS_BUILD_DIR}/bin/kubelistener-linux-amd64
+    - ${TRAVIS_BUILD_DIR}/bin/kubelistener-darwin-amd64
+  on:
+    repo: glerchundi/kubelistener
+    branch: master
+    tags: true
+    go: 1.5

@@ -4,10 +4,10 @@
 
 .PHONY: all kubelistener container push clean
 
-TAG = 0.1
+VERSION = 0.2.0
 PREFIX = quay.io/saltosystems
 
-all: container
+all: kubelistener
 
 kubelistener:
 	ROOTPATH=$(shell pwd -P); \
@@ -18,13 +18,20 @@ kubelistener:
 	  go build \
 	    -a -tags netgo -installsuffix cgo -ldflags '-extld ld -extldflags -static' -a -x \
 	    -o $$ROOTPATH/bin/kubelistener-linux-amd64 \
-	    .
+	    . \
+	; \
+	GOPATH=$$ROOTPATH/vendor:$$ROOTPATH \
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
+	  go build \
+	    -a -tags netgo -installsuffix cgo -ldflags '-extld ld -extldflags -static' -a -x \
+	    -o $$ROOTPATH/bin/kubelistener-darwin-amd64 \
+	    . \
 
 container: kubelistener
-	docker build -t $(PREFIX)/kubelistener:$(TAG) .
+	docker build -t $(PREFIX)/kubelistener:$(VERSION) .
 
 push: container
-	docker push $(PREFIX)/kubelistener:$(TAG)
+	docker push $(PREFIX)/kubelistener:$(VERSION)
 
 clean:
 	rm -f bin/kubelistener*
