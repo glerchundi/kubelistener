@@ -74,31 +74,59 @@ type kubelistener struct {
 }
 
 func (kl *kubelistener) handleServiceAdd(obj interface{}) {
-	marshalAndPrint(kl.addWriter, obj)
+	if service, ok := obj.(*kapi.Service); ok {
+		marshalAndPrint(kl.addWriter, service)
+	}
 }
 
 func (kl *kubelistener) handleServiceUpdate(oldObj, newObj interface{}) {
-	marshalAndPrint(kl.updateWriter, mergeUpdateObj(oldObj, newObj))
+	oldService, okOld := oldObj.(*kapi.Service)
+	newService, okNew := newObj.(*kapi.Service)
+	if okOld && okNew {
+		marshalAndPrint(kl.updateWriter, mergeUpdateObj(oldService, newService))
+	} else if okOld {
+		marshalAndPrint(kl.deleteWriter, oldService)
+	} else if okNew {
+		marshalAndPrint(kl.addWriter, newService)
+	}
 }
 
 func (kl *kubelistener) handleServiceDelete(obj interface{}) {
-	marshalAndPrint(kl.deleteWriter, obj)
+	if service, ok := obj.(*kapi.Service); ok {
+		marshalAndPrint(kl.deleteWriter, service)
+	}
 }
 
 func (kl *kubelistener) handleEndpointAdd(obj interface{}) {
-	marshalAndPrint(kl.addWriter, obj)
+	if endpoint, ok := obj.(*kapi.Endpoints); ok {
+		marshalAndPrint(kl.addWriter, endpoint)
+	}
 }
 
 func (kl *kubelistener) handlePodAdd(obj interface{}) {
-	marshalAndPrint(kl.addWriter, obj)
+	if pod, ok := obj.(*kapi.Pod); ok {
+		marshalAndPrint(kl.addWriter, pod)
+	}
 }
 
 func (kl *kubelistener) handlePodUpdate(oldObj interface{}, newObj interface{}) {
-	marshalAndPrint(kl.updateWriter, mergeUpdateObj(oldObj, newObj))
+	oldPod, okOld := oldObj.(*kapi.Pod)
+	newPod, okNew := newObj.(*kapi.Pod)
+	if okOld && okNew {
+		if oldPod.Status.PodIP != newPod.Status.PodIP {
+			marshalAndPrint(kl.updateWriter, mergeUpdateObj(oldPod, newPod))
+		}
+	} else if okOld {
+		marshalAndPrint(kl.deleteWriter, oldPod)
+	} else if okNew {
+		marshalAndPrint(kl.addWriter, newPod)
+	}
 }
 
 func (kl *kubelistener) handlePodDelete(obj interface{}) {
-	marshalAndPrint(kl.deleteWriter, obj)
+	if pod, ok := obj.(*kapi.Pod); ok {
+		marshalAndPrint(kl.deleteWriter, pod)
+	}
 }
 
 // Returns a cache.ListWatch that gets all changes to services.
@@ -150,8 +178,8 @@ func newKubeClient() (*kclient.Client, error) {
 		}
 	} else {
 		// We either have:
-		//  1) --kube_master_url and --kubecfg_file
-		//  2) just --kubecfg_file
+		//  1) --kube-master-url and --kubecfg_file
+		//  2) just --kubecfg-file
 		//  3) neither flag
 		// In any case, the logic is the same.  If (3), this will automatically
 		// fall back on the service account token.
@@ -169,7 +197,7 @@ func newKubeClient() (*kclient.Client, error) {
 }
 
 func newWriter(filename string) (io.Writer, error) {
-	return os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0600)
+	return os.OpenFile(filename, os.O_APPEND | os.O_WRONLY, 0600)
 }
 
 type updateObj struct {
