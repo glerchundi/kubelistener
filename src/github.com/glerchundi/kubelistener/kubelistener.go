@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"time"
+	"strings"
 
 	"github.com/golang/glog"
 	flag "github.com/spf13/pflag"
@@ -35,8 +36,6 @@ import (
 	kframework "k8s.io/kubernetes/pkg/controller/framework"
 	kfields "k8s.io/kubernetes/pkg/fields"
 	kutil "k8s.io/kubernetes/pkg/util"
-	//"strings"
-	"strings"
 )
 
 var (
@@ -201,8 +200,8 @@ func newWriter(filename string) (io.Writer, error) {
 }
 
 type updateObj struct {
-	old interface{} `json:"old"`
-	new interface{} `json:"new"`
+	Old interface{} `json:"old"`
+	New interface{} `json:"new"`
 }
 
 func mergeUpdateObj(oldObj, newObj interface{}) interface{} {
