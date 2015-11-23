@@ -4,6 +4,10 @@ go:
   - tip
 script:
   - make static
+# Travis CI fails to deploy to GiHub : mime-types-data requires Ruby version >= 2.0
+# http://stackoverflow.com/questions/33855550/travis-ci-fails-to-deploy-to-gihub-mime-types-data-requires-ruby-version-2
+before_deploy:
+  - gem install mime-types -v 2.6.2
 deploy:
   provider: releases
   skip_cleanup: true
