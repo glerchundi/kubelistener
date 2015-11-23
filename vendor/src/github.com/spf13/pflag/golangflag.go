@@ -60,7 +60,6 @@ func (v *flagValueWrapper) Type() string {
 	return v.flagType
 }
 
-// PFlagFromGoFlag will return a *pflag.Flag given a *flag.Flag
 func PFlagFromGoFlag(goflag *goflag.Flag) *Flag {
 	// Remember the default value as a string; it won't change.
 	flag := &Flag{
@@ -77,7 +76,6 @@ func PFlagFromGoFlag(goflag *goflag.Flag) *Flag {
 	return flag
 }
 
-// AddGoFlag will add the given *flag.Flag to the pflag.FlagSet
 func (f *FlagSet) AddGoFlag(goflag *goflag.Flag) {
 	if f.Lookup(goflag.Name) != nil {
 		return
@@ -86,7 +84,6 @@ func (f *FlagSet) AddGoFlag(goflag *goflag.Flag) {
 	f.AddFlag(newflag)
 }
 
-// AddGoFlagSet will add the given *flag.FlagSet to the pflag.FlagSet
 func (f *FlagSet) AddGoFlagSet(newSet *goflag.FlagSet) {
 	if newSet == nil {
 		return

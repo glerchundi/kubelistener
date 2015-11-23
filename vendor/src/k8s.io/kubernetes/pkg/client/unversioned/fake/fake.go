@@ -64,12 +64,9 @@ func (c *RESTClient) Delete() *unversioned.Request {
 }
 
 func (c *RESTClient) Do(req *http.Request) (*http.Response, error) {
-	if c.Err != nil {
-		return nil, c.Err
-	}
 	c.Req = req
 	if c.Client != unversioned.HTTPClient(nil) {
 		return c.Client.Do(req)
 	}
-	return c.Resp, nil
+	return c.Resp, c.Err
 }

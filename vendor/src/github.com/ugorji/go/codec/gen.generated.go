@@ -1,5 +1,5 @@
 // Copyright (c) 2012-2015 Ugorji Nwoke. All rights reserved.
-// Use of this source code is governed by a MIT license found in the LICENSE file.
+// Use of this source code is governed by a BSD-style license found in the LICENSE file.
 
 package codec
 
@@ -8,29 +8,24 @@ package codec
 const genDecMapTmpl = `
 {{var "v"}} := *{{ .Varname }}
 {{var "l"}} := r.ReadMapStart()
-{{var "bh"}} := z.DecBasicHandle()
 if {{var "v"}} == nil {
-	{{var "rl"}}, _ := z.DecInferLen({{var "l"}}, {{var "bh"}}.MaxInitLen, {{ .Size }})
-	{{var "v"}} = make(map[{{ .KTyp }}]{{ .Typ }}, {{var "rl"}})
+	if {{var "l"}} > 0 {
+		{{var "v"}} = make(map[{{ .KTyp }}]{{ .Typ }}, {{var "l"}})
+	} else {
+		{{var "v"}} = make(map[{{ .KTyp }}]{{ .Typ }}) // supports indefinite-length, etc
+	}
 	*{{ .Varname }} = {{var "v"}}
 }
-var {{var "mk"}} {{ .KTyp }}
-var {{var "mv"}} {{ .Typ }}
-var {{var "mg"}} bool
-if {{var "bh"}}.MapValueReset {
-	{{if decElemKindPtr}}{{var "mg"}} = true
-	{{else if decElemKindIntf}}if !{{var "bh"}}.InterfaceReset { {{var "mg"}} = true }
-	{{else if not decElemKindImmutable}}{{var "mg"}} = true
-	{{end}} }
 if {{var "l"}} > 0  {
 for {{var "j"}} := 0; {{var "j"}} < {{var "l"}}; {{var "j"}}++ {
+	var {{var "mk"}} {{ .KTyp }} 
 	{{ $x := printf "%vmk%v" .TempVar .Rand }}{{ decLineVarK $x }}
-{{ if eq .KTyp "interface{}" }}{{/* // special case if a byte array. */}}if {{var "bv"}}, {{var "bok"}} := {{var "mk"}}.([]byte); {{var "bok"}} {
+{{ if eq .KTyp "interface{}" }}// special case if a byte array.
+	if {{var "bv"}}, {{var "bok"}} := {{var "mk"}}.([]byte); {{var "bok"}} {
 		{{var "mk"}} = string({{var "bv"}})
-	}{{ end }}
-	if {{var "mg"}} {
-		{{var "mv"}} = {{var "v"}}[{{var "mk"}}]
-	} {{if not decElemKindImmutable}}else { {{var "mv"}} = {{decElemZero}} }{{end}}
+	}
+{{ end }}
+	{{var "mv"}} := {{var "v"}}[{{var "mk"}}]
 	{{ $x := printf "%vmv%v" .TempVar .Rand }}{{ decLineVar $x }}
 	if {{var "v"}} != nil {
 		{{var "v"}}[{{var "mk"}}] = {{var "mv"}}
@@ -38,37 +33,38 @@ for {{var "j"}} := 0; {{var "j"}} < {{var "l"}}; {{var "j"}}++ {
 }
 } else if {{var "l"}} < 0  {
 for {{var "j"}} := 0; !r.CheckBreak(); {{var "j"}}++ {
+	if {{var "j"}} > 0 {
+		r.ReadMapEntrySeparator()
+	}
+	var {{var "mk"}} {{ .KTyp }} 
 	{{ $x := printf "%vmk%v" .TempVar .Rand }}{{ decLineVarK $x }}
-{{ if eq .KTyp "interface{}" }}{{/* // special case if a byte array. */}}if {{var "bv"}}, {{var "bok"}} := {{var "mk"}}.([]byte); {{var "bok"}} {
+{{ if eq .KTyp "interface{}" }}// special case if a byte array.
+	if {{var "bv"}}, {{var "bok"}} := {{var "mk"}}.([]byte); {{var "bok"}} {
 		{{var "mk"}} = string({{var "bv"}})
-	}{{ end }}
-	if {{var "mg"}} {
-		{{var "mv"}} = {{var "v"}}[{{var "mk"}}]
-	} {{if not decElemKindImmutable}}else { {{var "mv"}} = {{decElemZero}} }{{end}}
+	}
+{{ end }}
+	r.ReadMapKVSeparator()
+	{{var "mv"}} := {{var "v"}}[{{var "mk"}}]
 	{{ $x := printf "%vmv%v" .TempVar .Rand }}{{ decLineVar $x }}
 	if {{var "v"}} != nil {
 		{{var "v"}}[{{var "mk"}}] = {{var "mv"}}
 	}
 }
-r.ReadEnd()
+r.ReadMapEnd()
 } // else len==0: TODO: Should we clear map entries?
 `
 
 const genDecListTmpl = `
-{{var "v"}} := {{ if not isArray}}*{{ end }}{{ .Varname }}
-{{var "h"}}, {{var "l"}} := z.DecSliceHelperStart() {{/* // helper, containerLenS */}}
+{{var "v"}} := *{{ .Varname }}
+{{var "h"}}, {{var "l"}} := z.DecSliceHelperStart()
 
-var {{var "rr"}}, {{var "rl"}} int {{/* // num2read, length of slice/array/chan */}}
-var {{var "c"}}, {{var "rt"}} bool {{/* // changed, truncated */}}
-_, _, _ = {{var "c"}}, {{var "rt"}}, {{var "rl"}}
-{{var "rr"}} = {{var "l"}}
-{{/* rl is NOT used. Only used for getting DecInferLen. len(r) used directly in code */}}
-
+var {{var "c"}} bool 
 {{ if not isArray }}if {{var "v"}} == nil {
-	if {{var "rl"}}, {{var "rt"}} = z.DecInferLen({{var "l"}}, z.DecBasicHandle().MaxInitLen, {{ .Size }}); {{var "rt"}} {
-		{{var "rr"}} = {{var "rl"}}
+	if {{var "l"}} <= 0 {
+        {{var "v"}} = make({{ .CTyp }}, 0)
+	} else {
+		{{var "v"}} = make({{ .CTyp }}, {{var "l"}})
 	}
-	{{var "v"}} = make({{ .CTyp }}, {{var "rl"}})
 	{{var "c"}} = true 
 } 
 {{ end }}
@@ -84,44 +80,40 @@ if {{var "l"}} == 0 { {{ if isSlice }}
 		{{ $x := printf "%st%s" .TempVar .Rand }}{{ decLineVar $x }}
 		{{var "v"}} <- {{var "t"}} 
 	{{ else }} 
+	{{var "n"}} := {{var "l"}} 
 	if {{var "l"}} > cap({{var "v"}}) {
-		{{ if isArray }}z.DecArrayCannotExpand(len({{var "v"}}), {{var "l"}})
-		{{ else }}{{var "rl"}}, {{var "rt"}} = z.DecInferLen({{var "l"}}, z.DecBasicHandle().MaxInitLen, {{ .Size }})
-		{{ if .Immutable }}
+		{{ if isArray }}r.ReadArrayCannotExpand(len({{var "v"}}), {{var "l"}})
+		{{var "n"}} = len({{var "v"}})
+		{{ else }}{{ if .Immutable }}
 		{{var "v2"}} := {{var "v"}}
-		{{var "v"}} = make([]{{ .Typ }}, {{var "rl"}})
+		{{var "v"}} = make([]{{ .Typ }}, {{var "l"}}, {{var "l"}})
 		if len({{var "v"}}) > 0 {
 			copy({{var "v"}}, {{var "v2"}}[:cap({{var "v2"}})])
 		}
-		{{ else }}{{var "v"}} = make([]{{ .Typ }}, {{var "rl"}})
+		{{ else }}{{var "v"}} = make([]{{ .Typ }}, {{var "l"}}, {{var "l"}})
 		{{ end }}{{var "c"}} = true 
 		{{ end }}
-		{{var "rr"}} = len({{var "v"}})
 	} else if {{var "l"}} != len({{var "v"}}) {
-		{{ if isSlice }}{{var "v"}} = {{var "v"}}[:{{var "l"}}]
-		{{var "c"}} = true {{ end }}
+		{{var "v"}} = {{var "v"}}[:{{var "l"}}]
+		{{var "c"}} = true 
 	}
 	{{var "j"}} := 0
-	for ; {{var "j"}} < {{var "rr"}} ; {{var "j"}}++ {
+	for ; {{var "j"}} < {{var "n"}} ; {{var "j"}}++ {
 		{{ $x := printf "%[1]vv%[2]v[%[1]vj%[2]v]" .TempVar .Rand }}{{ decLineVar $x }}
-	}
-	{{ if isArray }}for ; {{var "j"}} < {{var "l"}} ; {{var "j"}}++ {
+	} {{ if isArray }}
+	for ; {{var "j"}} < {{var "l"}} ; {{var "j"}}++ {
 		z.DecSwallow()
-	}
-	{{ else }}if {{var "rt"}} { {{/* means that it is mutable and slice */}}
-		for ; {{var "j"}} < {{var "l"}} ; {{var "j"}}++ {
-			{{var "v"}} = append({{var "v"}}, {{ zero}})
-			{{ $x := printf "%[1]vv%[2]v[%[1]vj%[2]v]" .TempVar .Rand }}{{ decLineVar $x }}
-		}
-	}
-	{{ end }}
-	{{ end }}{{/* closing 'if not chan' */}}
+	}{{ end }}
+	{{ end }}{{/* closing if not chan */}}
 } else {
 	for {{var "j"}} := 0; !r.CheckBreak(); {{var "j"}}++ {
 		if {{var "j"}} >= len({{var "v"}}) {
-			{{ if isArray }}z.DecArrayCannotExpand(len({{var "v"}}), {{var "j"}}+1)
+			{{ if isArray }}r.ReadArrayCannotExpand(len({{var "v"}}), {{var "j"}}+1)
 			{{ else if isSlice}}{{var "v"}} = append({{var "v"}}, {{zero}})// var {{var "z"}} {{ .Typ }}
 			{{var "c"}} = true {{ end }}
+		}
+		if {{var "j"}} > 0 {
+			{{var "h"}}.Sep({{var "j"}})
 		}
 		{{ if isChan}}
 		var {{var "t"}} {{ .Typ }}
@@ -137,9 +129,8 @@ if {{var "l"}} == 0 { {{ if isSlice }}
 	}
 	{{var "h"}}.End()
 }
-{{ if not isArray }}if {{var "c"}} { 
+if {{var "c"}} { 
 	*{{ .Varname }} = {{var "v"}}
-}{{ end }}
-
+}
 `
 

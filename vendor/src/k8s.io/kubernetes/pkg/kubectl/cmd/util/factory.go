@@ -24,10 +24,8 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"path"
 	"strconv"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -38,10 +36,8 @@ import (
 	"k8s.io/kubernetes/pkg/api/validation"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
-	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
-	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util"
 )
@@ -95,8 +91,6 @@ type Factory struct {
 	CanBeExposed func(kind string) error
 	// Check whether the kind of resources could be autoscaled
 	CanBeAutoscaled func(kind string) error
-	// AttachablePodForObject returns the pod to which to attach given an object.
-	AttachablePodForObject func(object runtime.Object) (*api.Pod, error)
 }
 
 // NewFactory creates a factory with the default Kubernetes resources defined
@@ -143,9 +137,6 @@ func NewFactory(optionalClientConfig clientcmd.ClientConfig) *Factory {
 		},
 		RESTClient: func(mapping *meta.RESTMapping) (resource.RESTClient, error) {
 			group, err := api.RESTMapper.GroupForResource(mapping.Resource)
-			if err != nil {
-				return nil, err
-			}
 			client, err := clients.ClientForVersion(mapping.APIVersion)
 			if err != nil {
 				return nil, err
@@ -262,52 +253,16 @@ func NewFactory(optionalClientConfig clientcmd.ClientConfig) *Factory {
 			return generator, ok
 		},
 		CanBeExposed: func(kind string) error {
-			switch kind {
-			case "ReplicationController", "Service", "Pod":
-				// nothing to do here
-			default:
-				return fmt.Errorf("cannot expose a %s", kind)
+			if kind != "ReplicationController" && kind != "Service" && kind != "Pod" {
+				return fmt.Errorf("invalid resource provided: %v, only a replication controller, service or pod is accepted", kind)
 			}
 			return nil
 		},
-		CanBeAutoscaled: func(kind string) error {
-			switch kind {
-			// TODO: support autoscale for deployments
-			case "ReplicationController":
-				// nothing to do here
-			default:
-				return fmt.Errorf("cannot autoscale a %s", kind)
+		CanBeAutoscaled: func(kind string) error { // TODO: support autoscale for deployments
+			if kind != "ReplicationController" {
+				return fmt.Errorf("invalid resource provided: %v, only a replication controller is accepted", kind)
 			}
 			return nil
-		},
-		AttachablePodForObject: func(object runtime.Object) (*api.Pod, error) {
-			client, err := clients.ClientForVersion("")
-			if err != nil {
-				return nil, err
-			}
-			switch t := object.(type) {
-			case *api.ReplicationController:
-				var pods *api.PodList
-				for pods == nil || len(pods.Items) == 0 {
-					var err error
-					if pods, err = client.Pods(t.Namespace).List(labels.SelectorFromSet(t.Spec.Selector), fields.Everything()); err != nil {
-						return nil, err
-					}
-					if len(pods.Items) == 0 {
-						time.Sleep(2 * time.Second)
-					}
-				}
-				pod := &pods.Items[0]
-				return pod, nil
-			case *api.Pod:
-				return t, nil
-			default:
-				_, kind, err := api.Scheme.ObjectVersionAndKind(object)
-				if err != nil {
-					return nil, err
-				}
-				return nil, fmt.Errorf("cannot attach to %s: not implemented", kind)
-			}
 		},
 	}
 }
@@ -362,63 +317,9 @@ type schemaClient interface {
 	Get() *client.Request
 }
 
-func recursiveSplit(dir string) []string {
-	parent, file := path.Split(dir)
-	if len(parent) == 0 {
-		return []string{file}
-	}
-	return append(recursiveSplit(parent[:len(parent)-1]), file)
-}
-
-func substituteUserHome(dir string) (string, error) {
-	if len(dir) == 0 || dir[0] != '~' {
-		return dir, nil
-	}
-	parts := recursiveSplit(dir)
-	if len(parts[0]) == 1 {
-		parts[0] = os.Getenv("HOME")
-	} else {
-		usr, err := user.Lookup(parts[0][1:])
-		if err != nil {
-			return "", err
-		}
-		parts[0] = usr.HomeDir
-	}
-	return path.Join(parts...), nil
-}
-
-func writeSchemaFile(schemaData []byte, cacheDir, cacheFile, prefix, groupVersion string) error {
-	if err := os.MkdirAll(path.Join(cacheDir, prefix, groupVersion), 0755); err != nil {
-		return err
-	}
-	tmpFile, err := ioutil.TempFile(cacheDir, "schema")
-	if err != nil {
-		// If we can't write, keep going.
-		if os.IsPermission(err) {
-			return nil
-		}
-		return err
-	}
-	if _, err := io.Copy(tmpFile, bytes.NewBuffer(schemaData)); err != nil {
-		return err
-	}
-	if err := os.Link(tmpFile.Name(), cacheFile); err != nil {
-		// If we can't write due to file existing, or permission problems, keep going.
-		if os.IsExist(err) || os.IsPermission(err) {
-			return nil
-		}
-		return err
-	}
-	return nil
-}
-
 func getSchemaAndValidate(c schemaClient, data []byte, prefix, groupVersion, cacheDir string) (err error) {
 	var schemaData []byte
-	fullDir, err := substituteUserHome(cacheDir)
-	if err != nil {
-		return err
-	}
-	cacheFile := path.Join(fullDir, prefix, groupVersion, schemaFileName)
+	cacheFile := path.Join(cacheDir, prefix, groupVersion, schemaFileName)
 
 	if len(cacheDir) != 0 {
 		if schemaData, err = ioutil.ReadFile(cacheFile); err != nil && !os.IsNotExist(err) {
@@ -434,7 +335,17 @@ func getSchemaAndValidate(c schemaClient, data []byte, prefix, groupVersion, cac
 			return err
 		}
 		if len(cacheDir) != 0 {
-			if err := writeSchemaFile(schemaData, fullDir, cacheFile, prefix, groupVersion); err != nil {
+			if err = os.MkdirAll(path.Join(cacheDir, prefix, groupVersion), 0755); err != nil {
+				return err
+			}
+			tmpFile, err := ioutil.TempFile(cacheDir, "schema")
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(tmpFile, bytes.NewBuffer(schemaData)); err != nil {
+				return err
+			}
+			if err := os.Link(tmpFile.Name(), cacheFile); err != nil && !os.IsExist(err) {
 				return err
 			}
 		}
@@ -583,13 +494,5 @@ func (f *Factory) PrinterForMapping(cmd *cobra.Command, mapping *meta.RESTMappin
 func (f *Factory) ClientMapperForCommand() resource.ClientMapper {
 	return resource.ClientMapperFunc(func(mapping *meta.RESTMapping) (resource.RESTClient, error) {
 		return f.RESTClient(mapping)
-	})
-}
-
-// NilClientMapperForCommand returns a ClientMapper which always returns nil.
-// When command is running locally and client isn't needed, this mapper can be parsed to NewBuilder.
-func (f *Factory) NilClientMapperForCommand() resource.ClientMapper {
-	return resource.ClientMapperFunc(func(mapping *meta.RESTMapping) (resource.RESTClient, error) {
-		return nil, nil
 	})
 }

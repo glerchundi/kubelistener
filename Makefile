@@ -2,14 +2,22 @@
 # MAINTAINER: Gorka Lerchundi Osa <glertxundi@gmail.com>
 # If you update this image please bump the tag value before pushing.
 
-.PHONY: all kubelistener container push clean
+.PHONY: all build test static container push clean
 
 VERSION = 0.2.0
 PREFIX = quay.io/saltosystems
 
-all: kubelistener
+all: build
 
-kubelistener:
+build:
+	@echo "Building kubelistener..."
+	gb build all
+
+test:
+	@echo "Running tests..."
+	gb test
+
+static:
 	ROOTPATH=$(shell pwd -P); \
 	mkdir -p $$ROOTPATH/bin; \
 	cd $$ROOTPATH/src/github.com/glerchundi/kubelistener; \
@@ -27,7 +35,7 @@ kubelistener:
 	    -o $$ROOTPATH/bin/kubelistener-darwin-amd64 \
 	    . \
 
-container: kubelistener
+container: static
 	docker build -t $(PREFIX)/kubelistener:$(VERSION) .
 
 push: container

@@ -31,7 +31,6 @@ import (
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/extensions"
-	kubectltesting "k8s.io/kubernetes/pkg/kubectl/testing"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/util/sets"
@@ -39,12 +38,23 @@ import (
 	"github.com/ghodss/yaml"
 )
 
-func init() {
-	api.Scheme.AddKnownTypes("", &kubectltesting.TestStruct{})
-	api.Scheme.AddKnownTypes(testapi.Default.Version(), &kubectltesting.TestStruct{})
+type testStruct struct {
+	unversioned.TypeMeta `json:",inline"`
+	api.ObjectMeta       `json:"metadata,omitempty"`
+	Key                  string         `json:"Key"`
+	Map                  map[string]int `json:"Map"`
+	StringList           []string       `json:"StringList"`
+	IntList              []int          `json:"IntList"`
 }
 
-var testData = kubectltesting.TestStruct{
+func (ts *testStruct) IsAnAPIObject() {}
+
+func init() {
+	api.Scheme.AddKnownTypes("", &testStruct{})
+	api.Scheme.AddKnownTypes(testapi.Default.Version(), &testStruct{})
+}
+
+var testData = testStruct{
 	Key:        "testValue",
 	Map:        map[string]int{"TestSubkey": 1},
 	StringList: []string{"a", "b", "c"},
@@ -52,13 +62,13 @@ var testData = kubectltesting.TestStruct{
 }
 
 func TestVersionedPrinter(t *testing.T) {
-	original := &kubectltesting.TestStruct{Key: "value"}
+	original := &testStruct{Key: "value"}
 	p := NewVersionedPrinter(
 		ResourcePrinterFunc(func(obj runtime.Object, w io.Writer) error {
 			if obj == original {
 				t.Fatalf("object should not be identical: %#v", obj)
 			}
-			if obj.(*kubectltesting.TestStruct).Key != "value" {
+			if obj.(*testStruct).Key != "value" {
 				t.Fatalf("object was not converted: %#v", obj)
 			}
 			return nil
@@ -167,14 +177,14 @@ func testPrinter(t *testing.T, printer ResourcePrinter, unmarshalFunc func(data 
 	if err != nil {
 		t.Fatal(err)
 	}
-	var poutput kubectltesting.TestStruct
+	var poutput testStruct
 	// Verify that given function runs without error.
 	err = unmarshalFunc(buf.Bytes(), &poutput)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Use real decode function to undo the versioning process.
-	poutput = kubectltesting.TestStruct{}
+	poutput = testStruct{}
 	err = runtime.YAMLDecoder(testapi.Default.Codec()).DecodeInto(buf.Bytes(), &poutput)
 	if err != nil {
 		t.Fatal(err)
@@ -1237,7 +1247,7 @@ func TestPrintDeployment(t *testing.T) {
 				},
 				Spec: extensions.DeploymentSpec{
 					Replicas: 5,
-					Template: api.PodTemplateSpec{
+					Template: &api.PodTemplateSpec{
 						Spec: api.PodSpec{Containers: make([]api.Container, 2)},
 					},
 				},

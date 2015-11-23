@@ -71,18 +71,15 @@ func ExtractList(obj Object) ([]Object, error) {
 	list := make([]Object, items.Len())
 	for i := range list {
 		raw := items.Index(i)
-		switch item := raw.Interface().(type) {
-		case Object:
-			list[i] = item
-		case RawExtension:
-			list[i] = &Unknown{
-				RawJSON: item.RawJSON,
-			}
+		var found bool
+		switch raw.Kind() {
+		case reflect.Interface, reflect.Ptr:
+			list[i], found = raw.Interface().(Object)
 		default:
-			var found bool
-			if list[i], found = raw.Addr().Interface().(Object); !found {
-				return nil, fmt.Errorf("%v: item[%v]: Expected object, got %#v(%s)", obj, i, raw.Interface(), raw.Kind())
-			}
+			list[i], found = raw.Addr().Interface().(Object)
+		}
+		if !found {
+			return nil, fmt.Errorf("item[%v]: Expected object, got %#v(%s)", i, raw.Interface(), raw.Kind())
 		}
 	}
 	return list, nil

@@ -20,9 +20,10 @@ import (
 	"fmt"
 	"strings"
 
-	utilerrors "k8s.io/kubernetes/pkg/util/errors"
+	"k8s.io/kubernetes/pkg/util/errors"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/golang/glog"
 )
 
 // ValidationErrorType is a machine readable value providing more detail about why
@@ -73,7 +74,7 @@ func (t ValidationErrorType) String() string {
 	case ValidationErrorTypeTooLong:
 		return "too long"
 	default:
-		panic(fmt.Sprintf("unrecognized validation type: %#v", t))
+		glog.Errorf("unrecognized validation type: %#v", t)
 		return ""
 	}
 }
@@ -160,7 +161,7 @@ func (list ValidationErrorList) Prefix(prefix string) ValidationErrorList {
 			}
 			list[i] = err
 		} else {
-			panic(fmt.Sprintf("Programmer error: ValidationErrorList holds non-ValidationError: %#v", list[i]))
+			glog.Warningf("Programmer error: ValidationErrorList holds non-ValidationError: %#v", list[i])
 		}
 	}
 	return list
@@ -174,7 +175,7 @@ func (list ValidationErrorList) PrefixIndex(index int) ValidationErrorList {
 
 // NewValidationErrorFieldPrefixMatcher returns an errors.Matcher that returns true
 // if the provided error is a ValidationError and has the provided ValidationErrorType.
-func NewValidationErrorTypeMatcher(t ValidationErrorType) utilerrors.Matcher {
+func NewValidationErrorTypeMatcher(t ValidationErrorType) errors.Matcher {
 	return func(err error) bool {
 		if e, ok := err.(*ValidationError); ok {
 			return e.Type == t
@@ -186,7 +187,7 @@ func NewValidationErrorTypeMatcher(t ValidationErrorType) utilerrors.Matcher {
 // NewValidationErrorFieldPrefixMatcher returns an errors.Matcher that returns true
 // if the provided error is a ValidationError and has a field with the provided
 // prefix.
-func NewValidationErrorFieldPrefixMatcher(prefix string) utilerrors.Matcher {
+func NewValidationErrorFieldPrefixMatcher(prefix string) errors.Matcher {
 	return func(err error) bool {
 		if e, ok := err.(*ValidationError); ok {
 			return strings.HasPrefix(e.Field, prefix)
@@ -196,12 +197,12 @@ func NewValidationErrorFieldPrefixMatcher(prefix string) utilerrors.Matcher {
 }
 
 // Filter removes items from the ValidationErrorList that match the provided fns.
-func (list ValidationErrorList) Filter(fns ...utilerrors.Matcher) ValidationErrorList {
-	err := utilerrors.FilterOut(utilerrors.NewAggregate(list), fns...)
+func (list ValidationErrorList) Filter(fns ...errors.Matcher) ValidationErrorList {
+	err := errors.FilterOut(errors.NewAggregate(list), fns...)
 	if err == nil {
 		return nil
 	}
 	// FilterOut that takes an Aggregate returns an Aggregate
-	agg := err.(utilerrors.Aggregate)
+	agg := err.(errors.Aggregate)
 	return ValidationErrorList(agg.Errors())
 }

@@ -28,7 +28,6 @@ import (
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
-	apitesting "k8s.io/kubernetes/pkg/api/testing"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/client/unversioned/fake"
 	"k8s.io/kubernetes/pkg/client/unversioned/testclient"
@@ -1012,6 +1011,7 @@ func TestUpdateExistingReplicationController(t *testing.T) {
 
 func TestUpdateWithRetries(t *testing.T) {
 	codec := testapi.Default.Codec()
+	grace := int64(30)
 	rc := &api.ReplicationController{
 		ObjectMeta: api.ObjectMeta{Name: "rc",
 			Labels: map[string]string{
@@ -1028,7 +1028,11 @@ func TestUpdateWithRetries(t *testing.T) {
 						"foo": "bar",
 					},
 				},
-				Spec: apitesting.DeepEqualSafePodSpec(),
+				Spec: api.PodSpec{
+					RestartPolicy:                 api.RestartPolicyAlways,
+					DNSPolicy:                     api.DNSClusterFirst,
+					TerminationGracePeriodSeconds: &grace,
+				},
 			},
 		},
 	}

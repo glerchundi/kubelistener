@@ -55,7 +55,7 @@ func newNavigationSteps(path string) (*navigationSteps, error) {
 			if err != nil {
 				return nil, err
 			}
-			nextPart := findNameStep(individualParts[currPartIndex:], sets.StringKeySet(mapValueOptions))
+			nextPart := findNameStep(individualParts[currPartIndex:], sets.KeySet(reflect.ValueOf(mapValueOptions)))
 
 			steps = append(steps, navigationStep{nextPart, mapValueType})
 			currPartIndex += len(strings.Split(nextPart, "."))

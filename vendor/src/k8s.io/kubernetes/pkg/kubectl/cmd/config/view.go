@@ -18,7 +18,6 @@ package config
 
 import (
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/golang/glog"
@@ -53,8 +52,6 @@ $ kubectl config view -o template --template='{{range .users}}{{ if eq .name "e2
 
 func NewCmdConfigView(out io.Writer, ConfigAccess ConfigAccess) *cobra.Command {
 	options := &ViewOptions{ConfigAccess: ConfigAccess}
-	// Default to yaml
-	defaultOutputFormat := "yaml"
 
 	cmd := &cobra.Command{
 		Use:     "view",
@@ -63,11 +60,6 @@ func NewCmdConfigView(out io.Writer, ConfigAccess ConfigAccess) *cobra.Command {
 		Example: view_example,
 		Run: func(cmd *cobra.Command, args []string) {
 			options.Complete()
-			outputFormat := cmdutil.GetFlagString(cmd, "output")
-			if outputFormat == "wide" {
-				fmt.Printf("--output wide is not available in kubectl config view; reset to default output format (%s)\n\n", defaultOutputFormat)
-				cmd.Flags().Set("output", defaultOutputFormat)
-			}
 
 			printer, _, err := cmdutil.PrinterForCommand(cmd)
 			if err != nil {
@@ -84,7 +76,8 @@ func NewCmdConfigView(out io.Writer, ConfigAccess ConfigAccess) *cobra.Command {
 	}
 
 	cmdutil.AddPrinterFlags(cmd)
-	cmd.Flags().Set("output", defaultOutputFormat)
+	// Default to yaml
+	cmd.Flags().Set("output", "yaml")
 
 	options.Merge.Default(true)
 	cmd.Flags().Var(&options.Merge, "merge", "merge together the full hierarchy of kubeconfig files")

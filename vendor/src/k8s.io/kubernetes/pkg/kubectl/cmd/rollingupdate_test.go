@@ -79,7 +79,7 @@ func TestValidateArgs(t *testing.T) {
 				cmd.Flags().Set(key, val)
 			}
 		}
-		err := validateArguments(cmd, test.filenames, test.args)
+		_, _, _, _, err := validateArguments(cmd, test.filenames, test.args)
 		if err != nil && !test.expectErr {
 			t.Errorf("unexpected error: %v (%s)", err, test.testName)
 		}

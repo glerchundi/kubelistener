@@ -32,11 +32,10 @@ import (
 	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/resource"
 	"k8s.io/kubernetes/pkg/api/testapi"
-	apitesting "k8s.io/kubernetes/pkg/api/testing"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/client/unversioned/fake"
 	"k8s.io/kubernetes/pkg/runtime"
-	utilerrors "k8s.io/kubernetes/pkg/util/errors"
+	"k8s.io/kubernetes/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/watch"
 	watchjson "k8s.io/kubernetes/pkg/watch/json"
 )
@@ -84,6 +83,7 @@ func fakeClientWith(testName string, t *testing.T, data map[string]string) Clien
 }
 
 func testData() (*api.PodList, *api.ServiceList) {
+	grace := int64(30)
 	pods := &api.PodList{
 		ListMeta: unversioned.ListMeta{
 			ResourceVersion: "15",
@@ -91,11 +91,19 @@ func testData() (*api.PodList, *api.ServiceList) {
 		Items: []api.Pod{
 			{
 				ObjectMeta: api.ObjectMeta{Name: "foo", Namespace: "test", ResourceVersion: "10"},
-				Spec:       apitesting.DeepEqualSafePodSpec(),
+				Spec: api.PodSpec{
+					RestartPolicy:                 api.RestartPolicyAlways,
+					DNSPolicy:                     api.DNSClusterFirst,
+					TerminationGracePeriodSeconds: &grace,
+				},
 			},
 			{
 				ObjectMeta: api.ObjectMeta{Name: "bar", Namespace: "test", ResourceVersion: "11"},
-				Spec:       apitesting.DeepEqualSafePodSpec(),
+				Spec: api.PodSpec{
+					RestartPolicy:                 api.RestartPolicyAlways,
+					DNSPolicy:                     api.DNSClusterFirst,
+					TerminationGracePeriodSeconds: &grace,
+				},
 			},
 		},
 	}
@@ -723,7 +731,7 @@ func TestContinueOnErrorVisitor(t *testing.T) {
 	if count != 3 {
 		t.Fatalf("did not visit all infos: %d", count)
 	}
-	agg, ok := err.(utilerrors.Aggregate)
+	agg, ok := err.(errors.Aggregate)
 	if !ok {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -962,7 +970,7 @@ func TestReceiveMultipleErrors(t *testing.T) {
 		t.Fatalf("unexpected response: %v %t %#v", err, singular, test.Infos)
 	}
 
-	errs, ok := err.(utilerrors.Aggregate)
+	errs, ok := err.(errors.Aggregate)
 	if !ok {
 		t.Fatalf("unexpected error: %v", reflect.TypeOf(err))
 	}

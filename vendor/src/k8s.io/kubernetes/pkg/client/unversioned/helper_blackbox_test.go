@@ -19,15 +19,13 @@ package unversioned_test
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"testing"
 
 	"k8s.io/kubernetes/pkg/api/testapi"
-	unversionedapi "k8s.io/kubernetes/pkg/api/unversioned"
+	unversioned_api "k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/client/unversioned/fake"
 )
@@ -41,14 +39,12 @@ func objBody(object interface{}) io.ReadCloser {
 }
 
 func TestNegotiateVersion(t *testing.T) {
-	refusedErr := fmt.Errorf("connection refused")
 	tests := []struct {
 		name, version, expectedVersion string
 		serverVersions                 []string
 		clientVersions                 []string
 		config                         *unversioned.Config
-		expectErr                      func(err error) bool
-		sendErr                        error
+		expectErr                      bool
 	}{
 		{
 			name:            "server supports client default",
@@ -57,6 +53,7 @@ func TestNegotiateVersion(t *testing.T) {
 			serverVersions:  []string{"version1", testapi.Default.Version()},
 			clientVersions:  []string{"version1", testapi.Default.Version()},
 			expectedVersion: "version1",
+			expectErr:       false,
 		},
 		{
 			name:            "server falls back to client supported",
@@ -65,6 +62,7 @@ func TestNegotiateVersion(t *testing.T) {
 			serverVersions:  []string{"version1"},
 			clientVersions:  []string{"version1", testapi.Default.Version()},
 			expectedVersion: "version1",
+			expectErr:       false,
 		},
 		{
 			name:            "explicit version supported",
@@ -73,22 +71,16 @@ func TestNegotiateVersion(t *testing.T) {
 			serverVersions:  []string{"version1", testapi.Default.Version()},
 			clientVersions:  []string{"version1", testapi.Default.Version()},
 			expectedVersion: testapi.Default.Version(),
+			expectErr:       false,
 		},
 		{
-			name:           "explicit version not supported",
-			version:        "",
-			config:         &unversioned.Config{Version: testapi.Default.Version()},
-			serverVersions: []string{"version1"},
-			clientVersions: []string{"version1", testapi.Default.Version()},
-			expectErr:      func(err error) bool { return strings.Contains(err.Error(), `server does not support API version "v1"`) },
-		},
-		{
-			name:           "connection refused error",
-			config:         &unversioned.Config{Version: testapi.Default.Version()},
-			serverVersions: []string{"version1"},
-			clientVersions: []string{"version1", testapi.Default.Version()},
-			sendErr:        refusedErr,
-			expectErr:      func(err error) bool { return err == refusedErr },
+			name:            "explicit version not supported",
+			version:         "",
+			config:          &unversioned.Config{Version: testapi.Default.Version()},
+			serverVersions:  []string{"version1"},
+			clientVersions:  []string{"version1", testapi.Default.Version()},
+			expectedVersion: "",
+			expectErr:       true,
 		},
 	}
 	codec := testapi.Default.Codec()
@@ -98,26 +90,20 @@ func TestNegotiateVersion(t *testing.T) {
 			Codec: codec,
 			Resp: &http.Response{
 				StatusCode: 200,
-				Body:       objBody(&unversionedapi.APIVersions{Versions: test.serverVersions}),
+				Body:       objBody(&unversioned_api.APIVersions{Versions: test.serverVersions}),
 			},
 			Client: fake.HTTPClientFunc(func(req *http.Request) (*http.Response, error) {
-				if test.sendErr != nil {
-					return nil, test.sendErr
-				}
-				return &http.Response{StatusCode: 200, Body: objBody(&unversionedapi.APIVersions{Versions: test.serverVersions})}, nil
+				return &http.Response{StatusCode: 200, Body: objBody(&unversioned_api.APIVersions{Versions: test.serverVersions})}, nil
 			}),
 		}
 		c := unversioned.NewOrDie(test.config)
 		c.Client = fakeClient.Client
 		response, err := unversioned.NegotiateVersion(c, test.config, test.version, test.clientVersions)
-		if err == nil && test.expectErr != nil {
+		if err == nil && test.expectErr {
 			t.Errorf("expected error, got nil for [%s].", test.name)
 		}
-		if err != nil {
-			if test.expectErr == nil || !test.expectErr(err) {
-				t.Errorf("unexpected error for [%s]: %v.", test.name, err)
-			}
-			continue
+		if err != nil && !test.expectErr {
+			t.Errorf("unexpected error for [%s]: %v.", test.name, err)
 		}
 		if response != test.expectedVersion {
 			t.Errorf("expected version %s, got %s.", test.expectedVersion, response)

@@ -32,6 +32,10 @@ var (
 	ErrNoSelfLink = errors.New("selfLink was empty, can't make reference")
 )
 
+// ForTesting_ReferencesAllowBlankSelfLinks can be set to true in tests to avoid
+// "ErrNoSelfLink" errors.
+var ForTesting_ReferencesAllowBlankSelfLinks = false
+
 // GetReference returns an ObjectReference which refers to the given
 // object, or an error if the object doesn't follow the conventions
 // that would allow this.
@@ -64,7 +68,11 @@ func GetReference(obj runtime.Object) (*ObjectReference, error) {
 	if version == "" {
 		selfLink := meta.SelfLink()
 		if selfLink == "" {
-			return nil, ErrNoSelfLink
+			if ForTesting_ReferencesAllowBlankSelfLinks {
+				version = "testing"
+			} else {
+				return nil, ErrNoSelfLink
+			}
 		} else {
 			selfLinkUrl, err := url.Parse(selfLink)
 			if err != nil {

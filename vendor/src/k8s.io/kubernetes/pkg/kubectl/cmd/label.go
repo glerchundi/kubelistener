@@ -17,7 +17,6 @@ limitations under the License.
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -28,8 +27,7 @@ import (
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/runtime"
-	utilerrors "k8s.io/kubernetes/pkg/util/errors"
-	"k8s.io/kubernetes/pkg/util/strategicpatch"
+	"k8s.io/kubernetes/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/util/validation"
 )
 
@@ -106,7 +104,7 @@ func validateNoOverwrites(meta *api.ObjectMeta, labels map[string]string) error 
 			allErrs = append(allErrs, fmt.Errorf("'%s' already has a value (%s), and --overwrite is false", key, value))
 		}
 	}
-	return utilerrors.NewAggregate(allErrs)
+	return errors.NewAggregate(allErrs)
 }
 
 func parseLabels(spec []string) (map[string]string, []string, error) {
@@ -234,31 +232,13 @@ func RunLabel(f *cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []stri
 			}
 			outputObj = info.Object
 		} else {
-			name, namespace, obj := info.Name, info.Namespace, info.Object
-			oldData, err := json.Marshal(obj)
-			if err != nil {
-				return err
-			}
-			if err := labelFunc(obj, overwrite, resourceVersion, lbls, remove); err != nil {
-				return err
-			}
-			newData, err := json.Marshal(obj)
-			if err != nil {
-				return err
-			}
-			patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, obj)
-			if err != nil {
-				return err
-			}
-
-			mapping := info.ResourceMapping()
-			client, err := f.RESTClient(mapping)
-			if err != nil {
-				return err
-			}
-			helper := resource.NewHelper(client, mapping)
-
-			outputObj, err = helper.Patch(namespace, name, api.StrategicMergePatchType, patchBytes)
+			outputObj, err = cmdutil.UpdateObject(info, func(obj runtime.Object) error {
+				err := labelFunc(obj, overwrite, resourceVersion, lbls, remove)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
 			if err != nil {
 				return err
 			}

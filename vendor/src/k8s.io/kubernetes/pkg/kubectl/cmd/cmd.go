@@ -174,8 +174,6 @@ Find more information at https://github.com/kubernetes/kubernetes.`,
 	cmds.AddCommand(NewCmdClusterInfo(f, out))
 	cmds.AddCommand(NewCmdApiVersions(f, out))
 	cmds.AddCommand(NewCmdVersion(f, out))
-	cmds.AddCommand(NewCmdExplain(f, out))
-	cmds.AddCommand(NewCmdConvert(f, out))
 
 	return cmds
 }

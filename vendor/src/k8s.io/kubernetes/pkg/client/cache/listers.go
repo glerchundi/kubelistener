@@ -95,10 +95,6 @@ func (s *StoreToPodLister) Exists(pod *api.Pod) (bool, error) {
 	return exists, nil
 }
 
-// NodeConditionPredicate is a function that indicates whether the given node's conditions meet
-// some set of criteria defined by the function.
-type NodeConditionPredicate func(node api.Node) bool
-
 // StoreToNodeLister makes a Store have the List method of the client.NodeInterface
 // The Store must contain (only) Nodes.
 type StoreToNodeLister struct {
@@ -113,26 +109,50 @@ func (s *StoreToNodeLister) List() (machines api.NodeList, err error) {
 }
 
 // NodeCondition returns a storeToNodeConditionLister
-func (s *StoreToNodeLister) NodeCondition(predicate NodeConditionPredicate) storeToNodeConditionLister {
+func (s *StoreToNodeLister) NodeCondition(conditionType api.NodeConditionType, conditionStatus api.ConditionStatus) storeToNodeConditionLister {
 	// TODO: Move this filtering server side. Currently our selectors don't facilitate searching through a list so we
 	// have the reflector filter out the Unschedulable field and sift through node conditions in the lister.
-	return storeToNodeConditionLister{s.Store, predicate}
+	return storeToNodeConditionLister{s.Store, conditionType, conditionStatus}
 }
 
 // storeToNodeConditionLister filters and returns nodes matching the given type and status from the store.
 type storeToNodeConditionLister struct {
-	store     Store
-	predicate NodeConditionPredicate
+	store           Store
+	conditionType   api.NodeConditionType
+	conditionStatus api.ConditionStatus
 }
 
-// List returns a list of nodes that match the conditions defined by the predicate functions in the storeToNodeConditionLister.
+// List returns a list of nodes that match the condition type/status in the storeToNodeConditionLister.
 func (s storeToNodeConditionLister) List() (nodes api.NodeList, err error) {
 	for _, m := range s.store.List() {
 		node := *m.(*api.Node)
-		if s.predicate(node) {
-			nodes.Items = append(nodes.Items, node)
+
+		// We currently only use a conditionType of "Ready". If the kubelet doesn't
+		// periodically report the status of a node, the nodecontroller sets its
+		// ConditionStatus to "Unknown". If the kubelet thinks a node is unhealthy
+		// it can (in theory) set its ConditionStatus to "False".
+		var nodeCondition *api.NodeCondition
+
+		// Get the last condition of the required type
+		for _, cond := range node.Status.Conditions {
+			if cond.Type == s.conditionType {
+				condCopy := cond
+				nodeCondition = &condCopy
+				break
+			} else {
+				glog.V(4).Infof("Ignoring condition type %v for node %v", cond.Type, node.Name)
+			}
+		}
+
+		// Check that the condition has the required status
+		if nodeCondition != nil {
+			if nodeCondition.Status == s.conditionStatus {
+				nodes.Items = append(nodes.Items, node)
+			} else {
+				glog.V(4).Infof("Ignoring node %v with condition status %v", node.Name, nodeCondition.Status)
+			}
 		} else {
-			glog.V(2).Infof("Node %s matches none of the conditions", node.Name)
+			glog.V(2).Infof("Node %s doesn't have conditions of type %v", node.Name, s.conditionType)
 		}
 	}
 	return
@@ -224,9 +244,9 @@ func (s *StoreToDaemonSetLister) Exists(ds *extensions.DaemonSet) (bool, error) 
 
 // List lists all daemon sets in the store.
 // TODO: converge on the interface in pkg/client
-func (s *StoreToDaemonSetLister) List() (dss extensions.DaemonSetList, err error) {
+func (s *StoreToDaemonSetLister) List() (dss []extensions.DaemonSet, err error) {
 	for _, c := range s.Store.List() {
-		dss.Items = append(dss.Items, *(c.(*extensions.DaemonSet)))
+		dss = append(dss, *(c.(*extensions.DaemonSet)))
 	}
 	return dss, nil
 }
@@ -342,9 +362,9 @@ func (s *StoreToJobLister) Exists(job *extensions.Job) (bool, error) {
 }
 
 // StoreToJobLister lists all jobs in the store.
-func (s *StoreToJobLister) List() (jobs extensions.JobList, err error) {
+func (s *StoreToJobLister) List() (jobs []extensions.Job, err error) {
 	for _, c := range s.Store.List() {
-		jobs.Items = append(jobs.Items, *(c.(*extensions.Job)))
+		jobs = append(jobs, *(c.(*extensions.Job)))
 	}
 	return jobs, nil
 }

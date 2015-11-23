@@ -28,12 +28,11 @@ import (
 	"k8s.io/kubernetes/pkg/api/validation"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
-	utilerrors "k8s.io/kubernetes/pkg/util/errors"
+	"k8s.io/kubernetes/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/util/sets"
 )
 
-var FileExtensions = []string{".json", ".yaml", ".yml"}
-var InputExtensions = append(FileExtensions, "stdin")
+var FileExtensions = []string{".json", ".stdin", ".yaml", ".yml"}
 
 // Builder provides convenience functions for taking arguments and parameters
 // from the command line and converting them to a list of resources to iterate
@@ -466,7 +465,7 @@ func (b *Builder) resourceTupleMappings() (map[string]*meta.RESTMapping, error) 
 
 func (b *Builder) visitorResult() *Result {
 	if len(b.errs) > 0 {
-		return &Result{err: utilerrors.NewAggregate(b.errs)}
+		return &Result{err: errors.NewAggregate(b.errs)}
 	}
 
 	if b.selectAll {
@@ -649,7 +648,7 @@ func (b *Builder) visitorResult() *Result {
 		return &Result{singular: singular, visitor: visitors, sources: b.paths}
 	}
 
-	return &Result{err: fmt.Errorf("you must provide one or more resources by argument or filename (%s)", strings.Join(InputExtensions, "|"))}
+	return &Result{err: fmt.Errorf("you must provide one or more resources by argument or filename (%s)", strings.Join(FileExtensions, "|"))}
 }
 
 // Do returns a Result object with a Visitor for the resources identified by the Builder.

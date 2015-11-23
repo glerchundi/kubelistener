@@ -826,12 +826,6 @@ func deepCopy_api_ListOptions(in ListOptions, out *ListOptions, c *conversion.Cl
 	}
 	out.Watch = in.Watch
 	out.ResourceVersion = in.ResourceVersion
-	if in.TimeoutSeconds != nil {
-		out.TimeoutSeconds = new(int64)
-		*out.TimeoutSeconds = *in.TimeoutSeconds
-	} else {
-		out.TimeoutSeconds = nil
-	}
 	return nil
 }
 
@@ -1488,47 +1482,6 @@ func deepCopy_api_PodProxyOptions(in PodProxyOptions, out *PodProxyOptions, c *c
 	return nil
 }
 
-func deepCopy_api_PodSecurityContext(in PodSecurityContext, out *PodSecurityContext, c *conversion.Cloner) error {
-	out.HostNetwork = in.HostNetwork
-	out.HostPID = in.HostPID
-	out.HostIPC = in.HostIPC
-	if in.SELinuxOptions != nil {
-		out.SELinuxOptions = new(SELinuxOptions)
-		if err := deepCopy_api_SELinuxOptions(*in.SELinuxOptions, out.SELinuxOptions, c); err != nil {
-			return err
-		}
-	} else {
-		out.SELinuxOptions = nil
-	}
-	if in.RunAsUser != nil {
-		out.RunAsUser = new(int64)
-		*out.RunAsUser = *in.RunAsUser
-	} else {
-		out.RunAsUser = nil
-	}
-	if in.RunAsNonRoot != nil {
-		out.RunAsNonRoot = new(bool)
-		*out.RunAsNonRoot = *in.RunAsNonRoot
-	} else {
-		out.RunAsNonRoot = nil
-	}
-	if in.SupplementalGroups != nil {
-		out.SupplementalGroups = make([]int64, len(in.SupplementalGroups))
-		for i := range in.SupplementalGroups {
-			out.SupplementalGroups[i] = in.SupplementalGroups[i]
-		}
-	} else {
-		out.SupplementalGroups = nil
-	}
-	if in.FSGroup != nil {
-		out.FSGroup = new(int64)
-		*out.FSGroup = *in.FSGroup
-	} else {
-		out.FSGroup = nil
-	}
-	return nil
-}
-
 func deepCopy_api_PodSpec(in PodSpec, out *PodSpec, c *conversion.Cloner) error {
 	if in.Volumes != nil {
 		out.Volumes = make([]Volume, len(in.Volumes))
@@ -1574,14 +1527,9 @@ func deepCopy_api_PodSpec(in PodSpec, out *PodSpec, c *conversion.Cloner) error 
 	}
 	out.ServiceAccountName = in.ServiceAccountName
 	out.NodeName = in.NodeName
-	if in.SecurityContext != nil {
-		out.SecurityContext = new(PodSecurityContext)
-		if err := deepCopy_api_PodSecurityContext(*in.SecurityContext, out.SecurityContext, c); err != nil {
-			return err
-		}
-	} else {
-		out.SecurityContext = nil
-	}
+	out.HostNetwork = in.HostNetwork
+	out.HostPID = in.HostPID
+	out.HostIPC = in.HostIPC
 	if in.ImagePullSecrets != nil {
 		out.ImagePullSecrets = make([]LocalObjectReference, len(in.ImagePullSecrets))
 		for i := range in.ImagePullSecrets {
@@ -1998,12 +1946,7 @@ func deepCopy_api_SecurityContext(in SecurityContext, out *SecurityContext, c *c
 	} else {
 		out.RunAsUser = nil
 	}
-	if in.RunAsNonRoot != nil {
-		out.RunAsNonRoot = new(bool)
-		*out.RunAsNonRoot = *in.RunAsNonRoot
-	} else {
-		out.RunAsNonRoot = nil
-	}
+	out.RunAsNonRoot = in.RunAsNonRoot
 	return nil
 }
 
@@ -2313,6 +2256,8 @@ func deepCopy_resource_Quantity(in resource.Quantity, out *resource.Quantity, c 
 	if in.Amount != nil {
 		if newVal, err := c.DeepCopy(in.Amount); err != nil {
 			return err
+		} else if newVal == nil {
+			out.Amount = nil
 		} else {
 			out.Amount = newVal.(*inf.Dec)
 		}
@@ -2436,7 +2381,6 @@ func init() {
 		deepCopy_api_PodList,
 		deepCopy_api_PodLogOptions,
 		deepCopy_api_PodProxyOptions,
-		deepCopy_api_PodSecurityContext,
 		deepCopy_api_PodSpec,
 		deepCopy_api_PodStatus,
 		deepCopy_api_PodStatusResult,

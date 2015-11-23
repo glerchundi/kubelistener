@@ -36,8 +36,6 @@ func TestValidateHorizontalPodAutoscaler(t *testing.T) {
 			},
 			Spec: extensions.HorizontalPodAutoscalerSpec{
 				ScaleRef: extensions.SubresourceReference{
-					Kind:        "ReplicationController",
-					Name:        "myrc",
 					Subresource: "scale",
 				},
 				MinReplicas:    newInt(1),
@@ -52,8 +50,6 @@ func TestValidateHorizontalPodAutoscaler(t *testing.T) {
 			},
 			Spec: extensions.HorizontalPodAutoscalerSpec{
 				ScaleRef: extensions.SubresourceReference{
-					Kind:        "ReplicationController",
-					Name:        "myrc",
 					Subresource: "scale",
 				},
 				MinReplicas: newInt(1),
@@ -67,151 +63,55 @@ func TestValidateHorizontalPodAutoscaler(t *testing.T) {
 		}
 	}
 
-	errorCases := []struct {
-		horizontalPodAutoscaler extensions.HorizontalPodAutoscaler
-		msg                     string
-	}{
-		{
-			horizontalPodAutoscaler: extensions.HorizontalPodAutoscaler{
-				ObjectMeta: api.ObjectMeta{Name: "myautoscaler", Namespace: api.NamespaceDefault},
-				Spec: extensions.HorizontalPodAutoscalerSpec{
-					ScaleRef:       extensions.SubresourceReference{Name: "myrc", Subresource: "scale"},
-					MinReplicas:    newInt(1),
-					MaxReplicas:    5,
-					CPUUtilization: &extensions.CPUTargetUtilization{TargetPercentage: 70},
-				},
+	errorCases := map[string]extensions.HorizontalPodAutoscaler{
+		"must be bigger or equal to 1": {
+			ObjectMeta: api.ObjectMeta{
+				Name:      "myautoscaler",
+				Namespace: api.NamespaceDefault,
 			},
-			msg: "scaleRef.kind: required",
+			Spec: extensions.HorizontalPodAutoscalerSpec{
+				ScaleRef: extensions.SubresourceReference{
+					Subresource: "scale",
+				},
+				MinReplicas: newInt(-1),
+				MaxReplicas: 5,
+			},
 		},
-		{
-			horizontalPodAutoscaler: extensions.HorizontalPodAutoscaler{
-				ObjectMeta: api.ObjectMeta{Name: "myautoscaler", Namespace: api.NamespaceDefault},
-				Spec: extensions.HorizontalPodAutoscalerSpec{
-					ScaleRef:       extensions.SubresourceReference{Kind: "..", Name: "myrc", Subresource: "scale"},
-					MinReplicas:    newInt(1),
-					MaxReplicas:    5,
-					CPUUtilization: &extensions.CPUTargetUtilization{TargetPercentage: 70},
-				},
+		"must be bigger or equal to minReplicas": {
+			ObjectMeta: api.ObjectMeta{
+				Name:      "myautoscaler",
+				Namespace: api.NamespaceDefault,
 			},
-			msg: "scaleRef.kind: invalid",
+			Spec: extensions.HorizontalPodAutoscalerSpec{
+				ScaleRef: extensions.SubresourceReference{
+					Subresource: "scale",
+				},
+				MinReplicas: newInt(7),
+				MaxReplicas: 5,
+			},
 		},
-		{
-			horizontalPodAutoscaler: extensions.HorizontalPodAutoscaler{
-				ObjectMeta: api.ObjectMeta{Name: "myautoscaler", Namespace: api.NamespaceDefault},
-				Spec: extensions.HorizontalPodAutoscalerSpec{
-					ScaleRef:       extensions.SubresourceReference{Kind: "ReplicationController", Subresource: "scale"},
-					MinReplicas:    newInt(1),
-					MaxReplicas:    5,
-					CPUUtilization: &extensions.CPUTargetUtilization{TargetPercentage: 70},
-				},
+		"must be non-negative": {
+			ObjectMeta: api.ObjectMeta{
+				Name:      "myautoscaler",
+				Namespace: api.NamespaceDefault,
 			},
-			msg: "scaleRef.name: required",
-		},
-		{
-			horizontalPodAutoscaler: extensions.HorizontalPodAutoscaler{
-				ObjectMeta: api.ObjectMeta{Name: "myautoscaler", Namespace: api.NamespaceDefault},
-				Spec: extensions.HorizontalPodAutoscalerSpec{
-					ScaleRef:       extensions.SubresourceReference{Kind: "ReplicationController", Name: "..", Subresource: "scale"},
-					MinReplicas:    newInt(1),
-					MaxReplicas:    5,
-					CPUUtilization: &extensions.CPUTargetUtilization{TargetPercentage: 70},
+			Spec: extensions.HorizontalPodAutoscalerSpec{
+				ScaleRef: extensions.SubresourceReference{
+					Subresource: "scale",
 				},
+				MinReplicas:    newInt(1),
+				MaxReplicas:    5,
+				CPUUtilization: &extensions.CPUTargetUtilization{TargetPercentage: -70},
 			},
-			msg: "scaleRef.name: invalid",
-		},
-		{
-			horizontalPodAutoscaler: extensions.HorizontalPodAutoscaler{
-				ObjectMeta: api.ObjectMeta{Name: "myautoscaler", Namespace: api.NamespaceDefault},
-				Spec: extensions.HorizontalPodAutoscalerSpec{
-					ScaleRef:       extensions.SubresourceReference{Kind: "ReplicationController", Name: "myrc", Subresource: ""},
-					MinReplicas:    newInt(1),
-					MaxReplicas:    5,
-					CPUUtilization: &extensions.CPUTargetUtilization{TargetPercentage: 70},
-				},
-			},
-			msg: "scaleRef.subresource: required",
-		},
-		{
-			horizontalPodAutoscaler: extensions.HorizontalPodAutoscaler{
-				ObjectMeta: api.ObjectMeta{Name: "myautoscaler", Namespace: api.NamespaceDefault},
-				Spec: extensions.HorizontalPodAutoscalerSpec{
-					ScaleRef:       extensions.SubresourceReference{Kind: "ReplicationController", Name: "myrc", Subresource: ".."},
-					MinReplicas:    newInt(1),
-					MaxReplicas:    5,
-					CPUUtilization: &extensions.CPUTargetUtilization{TargetPercentage: 70},
-				},
-			},
-			msg: "scaleRef.subresource: invalid",
-		},
-		{
-			horizontalPodAutoscaler: extensions.HorizontalPodAutoscaler{
-				ObjectMeta: api.ObjectMeta{Name: "myautoscaler", Namespace: api.NamespaceDefault},
-				Spec: extensions.HorizontalPodAutoscalerSpec{
-					ScaleRef:       extensions.SubresourceReference{Kind: "ReplicationController", Name: "myrc", Subresource: "randomsubresource"},
-					MinReplicas:    newInt(1),
-					MaxReplicas:    5,
-					CPUUtilization: &extensions.CPUTargetUtilization{TargetPercentage: 70},
-				},
-			},
-			msg: "scaleRef.subresource: unsupported",
-		},
-		{
-			horizontalPodAutoscaler: extensions.HorizontalPodAutoscaler{
-				ObjectMeta: api.ObjectMeta{
-					Name:      "myautoscaler",
-					Namespace: api.NamespaceDefault,
-				},
-				Spec: extensions.HorizontalPodAutoscalerSpec{
-					ScaleRef: extensions.SubresourceReference{
-						Subresource: "scale",
-					},
-					MinReplicas: newInt(-1),
-					MaxReplicas: 5,
-				},
-			},
-			msg: "must be bigger or equal to 1",
-		},
-		{
-			horizontalPodAutoscaler: extensions.HorizontalPodAutoscaler{
-				ObjectMeta: api.ObjectMeta{
-					Name:      "myautoscaler",
-					Namespace: api.NamespaceDefault,
-				},
-				Spec: extensions.HorizontalPodAutoscalerSpec{
-					ScaleRef: extensions.SubresourceReference{
-						Subresource: "scale",
-					},
-					MinReplicas: newInt(7),
-					MaxReplicas: 5,
-				},
-			},
-			msg: "must be bigger or equal to minReplicas",
-		},
-		{
-			horizontalPodAutoscaler: extensions.HorizontalPodAutoscaler{
-				ObjectMeta: api.ObjectMeta{
-					Name:      "myautoscaler",
-					Namespace: api.NamespaceDefault,
-				},
-				Spec: extensions.HorizontalPodAutoscalerSpec{
-					ScaleRef: extensions.SubresourceReference{
-						Subresource: "scale",
-					},
-					MinReplicas:    newInt(1),
-					MaxReplicas:    5,
-					CPUUtilization: &extensions.CPUTargetUtilization{TargetPercentage: -70},
-				},
-			},
-			msg: "must be bigger or equal to 1",
 		},
 	}
 
-	for _, c := range errorCases {
-		errs := ValidateHorizontalPodAutoscaler(&c.horizontalPodAutoscaler)
+	for k, v := range errorCases {
+		errs := ValidateHorizontalPodAutoscaler(&v)
 		if len(errs) == 0 {
-			t.Errorf("expected failure for %s", c.msg)
-		} else if !strings.Contains(errs[0].Error(), c.msg) {
-			t.Errorf("unexpected error: %v, expected: %s", errs[0], c.msg)
+			t.Errorf("expected failure for %s", k)
+		} else if !strings.Contains(errs[0].Error(), k) {
+			t.Errorf("unexpected error: %v, expected: %s", errs[0], k)
 		}
 	}
 }
@@ -701,7 +601,7 @@ func validDeployment() *extensions.Deployment {
 			Selector: map[string]string{
 				"name": "abc",
 			},
-			Template: api.PodTemplateSpec{
+			Template: &api.PodTemplateSpec{
 				ObjectMeta: api.ObjectMeta{
 					Name:      "abc",
 					Namespace: api.NamespaceDefault,
@@ -1027,6 +927,12 @@ func TestValidateIngress(t *testing.T) {
 	}
 }
 
+func newInt(val int) *int {
+	p := new(int)
+	*p = val
+	return p
+}
+
 func TestValidateIngressStatusUpdate(t *testing.T) {
 	defaultBackend := extensions.IngressBackend{
 		ServiceName: "default-backend",
@@ -1117,124 +1023,4 @@ func TestValidateIngressStatusUpdate(t *testing.T) {
 			}
 		}
 	}
-}
-
-func TestValidateClusterAutoscaler(t *testing.T) {
-	successCases := []extensions.ClusterAutoscaler{
-		{
-			ObjectMeta: api.ObjectMeta{
-				Name:      "ClusterAutoscaler",
-				Namespace: api.NamespaceDefault,
-			},
-			Spec: extensions.ClusterAutoscalerSpec{
-				MinNodes: 1,
-				MaxNodes: 5,
-				TargetUtilization: []extensions.NodeUtilization{
-					{
-						Resource: extensions.CpuRequest,
-						Value:    0.7,
-					},
-				},
-			},
-		},
-	}
-	for _, successCase := range successCases {
-		if errs := ValidateClusterAutoscaler(&successCase); len(errs) != 0 {
-			t.Errorf("expected success: %v", errs)
-		}
-	}
-
-	errorCases := map[string]extensions.ClusterAutoscaler{
-		"name must be ClusterAutoscaler": {
-			ObjectMeta: api.ObjectMeta{
-				Name:      "TestClusterAutoscaler",
-				Namespace: api.NamespaceDefault,
-			},
-			Spec: extensions.ClusterAutoscalerSpec{
-				MinNodes: 1,
-				MaxNodes: 5,
-				TargetUtilization: []extensions.NodeUtilization{
-					{
-						Resource: extensions.CpuRequest,
-						Value:    0.7,
-					},
-				},
-			},
-		},
-		"namespace must be default": {
-			ObjectMeta: api.ObjectMeta{
-				Name:      "ClusterAutoscaler",
-				Namespace: "test",
-			},
-			Spec: extensions.ClusterAutoscalerSpec{
-				MinNodes: 1,
-				MaxNodes: 5,
-				TargetUtilization: []extensions.NodeUtilization{
-					{
-						Resource: extensions.CpuRequest,
-						Value:    0.7,
-					},
-				},
-			},
-		},
-
-		`must be non-negative`: {
-			ObjectMeta: api.ObjectMeta{
-				Name:      "ClusterAutoscaler",
-				Namespace: api.NamespaceDefault,
-			},
-			Spec: extensions.ClusterAutoscalerSpec{
-				MinNodes: -1,
-				MaxNodes: 5,
-				TargetUtilization: []extensions.NodeUtilization{
-					{
-						Resource: extensions.CpuRequest,
-						Value:    0.7,
-					},
-				},
-			},
-		},
-		`must be bigger or equal to minNodes`: {
-			ObjectMeta: api.ObjectMeta{
-				Name:      "ClusterAutoscaler",
-				Namespace: api.NamespaceDefault,
-			},
-			Spec: extensions.ClusterAutoscalerSpec{
-				MinNodes: 10,
-				MaxNodes: 5,
-				TargetUtilization: []extensions.NodeUtilization{
-					{
-						Resource: extensions.CpuRequest,
-						Value:    0.7,
-					},
-				},
-			},
-		},
-		"required value": {
-			ObjectMeta: api.ObjectMeta{
-				Name:      "ClusterAutoscaler",
-				Namespace: api.NamespaceDefault,
-			},
-			Spec: extensions.ClusterAutoscalerSpec{
-				MinNodes:          1,
-				MaxNodes:          5,
-				TargetUtilization: []extensions.NodeUtilization{},
-			},
-		},
-	}
-
-	for k, v := range errorCases {
-		errs := ValidateClusterAutoscaler(&v)
-		if len(errs) == 0 {
-			t.Errorf("expected failure for %s", k)
-		} else if !strings.Contains(errs[0].Error(), k) {
-			t.Errorf("unexpected error: %v, expected: %s", errs[0], k)
-		}
-	}
-}
-
-func newInt(val int) *int {
-	p := new(int)
-	*p = val
-	return p
 }

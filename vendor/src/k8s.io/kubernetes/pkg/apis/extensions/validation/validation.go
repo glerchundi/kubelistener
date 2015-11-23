@@ -34,6 +34,16 @@ import (
 	utilvalidation "k8s.io/kubernetes/pkg/util/validation"
 )
 
+const isNegativeErrorMsg string = `must be non-negative`
+
+// TODO: Expose from apivalidation instead of duplicating.
+func intervalErrorMsg(lo, hi int) string {
+	return fmt.Sprintf(`must be greater than %d and less than %d`, lo, hi)
+}
+
+var portRangeErrorMsg string = intervalErrorMsg(0, 65536)
+var portNameErrorMsg string = fmt.Sprintf(`must be an IANA_SVC_NAME (at most 15 characters, matching regex %s, it must contain at least one letter [a-z], and hyphens cannot be adjacent to other hyphens): e.g. "http"`, validation.IdentifierNoHyphensBeginEndFmt)
+
 // ValidateHorizontalPodAutoscaler can be used to check whether the given autoscaler name is valid.
 // Prefix indicates this name will be used as part of generation, in which case trailing dashes are allowed.
 func ValidateHorizontalPodAutoscalerName(name string, prefix bool) (bool, string) {
@@ -53,34 +63,7 @@ func validateHorizontalPodAutoscalerSpec(autoscaler extensions.HorizontalPodAuto
 		allErrs = append(allErrs, errs.NewFieldInvalid("maxReplicas", autoscaler.MaxReplicas, `must be bigger or equal to minReplicas`))
 	}
 	if autoscaler.CPUUtilization != nil && autoscaler.CPUUtilization.TargetPercentage < 1 {
-		allErrs = append(allErrs, errs.NewFieldInvalid("cpuUtilization.targetPercentage", autoscaler.CPUUtilization.TargetPercentage, `must be bigger or equal to 1`))
-	}
-	if refErrs := ValidateSubresourceReference(autoscaler.ScaleRef); len(refErrs) > 0 {
-		allErrs = append(allErrs, refErrs.Prefix("scaleRef")...)
-	} else if autoscaler.ScaleRef.Subresource != "scale" {
-		allErrs = append(allErrs, errs.NewFieldValueNotSupported("scaleRef.subresource", autoscaler.ScaleRef.Subresource, []string{"scale"}))
-	}
-	return allErrs
-}
-
-func ValidateSubresourceReference(ref extensions.SubresourceReference) errs.ValidationErrorList {
-	allErrs := errs.ValidationErrorList{}
-	if len(ref.Kind) == 0 {
-		allErrs = append(allErrs, errs.NewFieldRequired("kind"))
-	} else if ok, msg := apivalidation.IsValidPathSegmentName(ref.Kind); !ok {
-		allErrs = append(allErrs, errs.NewFieldInvalid("kind", ref.Kind, msg))
-	}
-
-	if len(ref.Name) == 0 {
-		allErrs = append(allErrs, errs.NewFieldRequired("name"))
-	} else if ok, msg := apivalidation.IsValidPathSegmentName(ref.Name); !ok {
-		allErrs = append(allErrs, errs.NewFieldInvalid("name", ref.Name, msg))
-	}
-
-	if len(ref.Subresource) == 0 {
-		allErrs = append(allErrs, errs.NewFieldRequired("subresource"))
-	} else if ok, msg := apivalidation.IsValidPathSegmentName(ref.Subresource); !ok {
-		allErrs = append(allErrs, errs.NewFieldInvalid("subresource", ref.Subresource, msg))
+		allErrs = append(allErrs, errs.NewFieldInvalid("cpuUtilization.targetPercentage", autoscaler.CPUUtilization.TargetPercentage, isNegativeErrorMsg))
 	}
 	return allErrs
 }
@@ -135,7 +118,7 @@ func ValidateThirdPartyResource(obj *extensions.ThirdPartyResource) errs.Validat
 // ValidateDaemonSet tests if required fields in the DaemonSet are set.
 func ValidateDaemonSet(controller *extensions.DaemonSet) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
-	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&controller.ObjectMeta, true, ValidateDaemonSetName).Prefix("metadata")...)
+	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&controller.ObjectMeta, true, apivalidation.ValidateReplicationControllerName).Prefix("metadata")...)
 	allErrs = append(allErrs, ValidateDaemonSetSpec(&controller.Spec).Prefix("spec")...)
 	return allErrs
 }
@@ -292,7 +275,7 @@ func ValidateDeploymentSpec(spec *extensions.DeploymentSpec) errs.ValidationErro
 	allErrs := errs.ValidationErrorList{}
 	allErrs = append(allErrs, apivalidation.ValidateNonEmptySelector(spec.Selector, "selector")...)
 	allErrs = append(allErrs, apivalidation.ValidatePositiveField(int64(spec.Replicas), "replicas")...)
-	allErrs = append(allErrs, apivalidation.ValidatePodTemplateSpecForRC(&spec.Template, spec.Selector, spec.Replicas, "template")...)
+	allErrs = append(allErrs, apivalidation.ValidatePodTemplateSpecForRC(spec.Template, spec.Selector, spec.Replicas, "template")...)
 	allErrs = append(allErrs, ValidateDeploymentStrategy(&spec.Strategy, "strategy")...)
 	allErrs = append(allErrs, apivalidation.ValidateLabelName(spec.UniqueLabelKey, "uniqueLabel")...)
 	return allErrs
@@ -335,11 +318,11 @@ func ValidateJob(job *extensions.Job) errs.ValidationErrorList {
 func ValidateJobSpec(spec *extensions.JobSpec) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
 
-	if spec.Parallelism != nil {
-		allErrs = append(allErrs, apivalidation.ValidatePositiveField(int64(*spec.Parallelism), "parallelism")...)
+	if spec.Parallelism != nil && *spec.Parallelism < 0 {
+		allErrs = append(allErrs, errs.NewFieldInvalid("parallelism", spec.Parallelism, isNegativeErrorMsg))
 	}
-	if spec.Completions != nil {
-		allErrs = append(allErrs, apivalidation.ValidatePositiveField(int64(*spec.Completions), "completions")...)
+	if spec.Completions != nil && *spec.Completions < 0 {
+		allErrs = append(allErrs, errs.NewFieldInvalid("completions", spec.Completions, isNegativeErrorMsg))
 	}
 	if spec.Selector == nil {
 		allErrs = append(allErrs, errs.NewFieldRequired("selector"))
@@ -388,9 +371,15 @@ func ValidateJobUpdateStatus(oldJob, job *extensions.Job) errs.ValidationErrorLi
 func ValidateJobSpecUpdate(oldSpec, spec extensions.JobSpec) errs.ValidationErrorList {
 	allErrs := errs.ValidationErrorList{}
 	allErrs = append(allErrs, ValidateJobSpec(&spec)...)
-	allErrs = append(allErrs, apivalidation.ValidateImmutableField(oldSpec.Completions, spec.Completions, "completions")...)
-	allErrs = append(allErrs, apivalidation.ValidateImmutableField(oldSpec.Selector, spec.Selector, "selector")...)
-	allErrs = append(allErrs, apivalidation.ValidateImmutableField(oldSpec.Template, spec.Template, "template")...)
+	if !api.Semantic.DeepEqual(oldSpec.Completions, spec.Completions) {
+		allErrs = append(allErrs, errs.NewFieldInvalid("completions", spec.Completions, "field is immutable"))
+	}
+	if !api.Semantic.DeepEqual(oldSpec.Selector, spec.Selector) {
+		allErrs = append(allErrs, errs.NewFieldInvalid("selector", spec.Selector, "field is immutable"))
+	}
+	if !api.Semantic.DeepEqual(oldSpec.Template, spec.Template) {
+		allErrs = append(allErrs, errs.NewFieldInvalid("template", "[omitted]", "field is immutable"))
+	}
 	return allErrs
 }
 
@@ -517,48 +506,11 @@ func validateIngressBackend(backend *extensions.IngressBackend) errs.ValidationE
 			allErrs = append(allErrs, errs.NewFieldInvalid("servicePort", backend.ServicePort.StrVal, apivalidation.DNS1123LabelErrorMsg))
 		}
 		if !utilvalidation.IsValidPortName(backend.ServicePort.StrVal) {
-			allErrs = append(allErrs, errs.NewFieldInvalid("servicePort", backend.ServicePort.StrVal, apivalidation.PortNameErrorMsg))
+			allErrs = append(allErrs, errs.NewFieldInvalid("servicePort", backend.ServicePort.StrVal, portNameErrorMsg))
 		}
 	} else if !utilvalidation.IsValidPortNum(backend.ServicePort.IntVal) {
-		allErrs = append(allErrs, errs.NewFieldInvalid("servicePort", backend.ServicePort, apivalidation.PortRangeErrorMsg))
+		allErrs = append(allErrs, errs.NewFieldInvalid("servicePort", backend.ServicePort, portRangeErrorMsg))
 	}
-	return allErrs
-}
-
-func validateClusterAutoscalerSpec(spec extensions.ClusterAutoscalerSpec) errs.ValidationErrorList {
-	allErrs := errs.ValidationErrorList{}
-	if spec.MinNodes < 0 {
-		allErrs = append(allErrs, errs.NewFieldInvalid("minNodes", spec.MinNodes, `must be non-negative`))
-	}
-	if spec.MaxNodes < spec.MinNodes {
-		allErrs = append(allErrs, errs.NewFieldInvalid("maxNodes", spec.MaxNodes, `must be bigger or equal to minNodes`))
-	}
-	if len(spec.TargetUtilization) == 0 {
-		allErrs = append(allErrs, errs.NewFieldRequired("targetUtilization"))
-	}
-	for _, target := range spec.TargetUtilization {
-		if len(target.Resource) == 0 {
-			allErrs = append(allErrs, errs.NewFieldRequired("targetUtilization.resource"))
-		}
-		if target.Value <= 0 {
-			allErrs = append(allErrs, errs.NewFieldInvalid("targetUtilization.value", target.Value, "must be greater than 0"))
-		}
-		if target.Value > 1 {
-			allErrs = append(allErrs, errs.NewFieldInvalid("targetUtilization.value", target.Value, "must be less or equal 1"))
-		}
-	}
-	return allErrs
-}
-
-func ValidateClusterAutoscaler(autoscaler *extensions.ClusterAutoscaler) errs.ValidationErrorList {
-	allErrs := errs.ValidationErrorList{}
-	if autoscaler.Name != "ClusterAutoscaler" {
-		allErrs = append(allErrs, errs.NewFieldInvalid("name", autoscaler.Name, `name must be ClusterAutoscaler`))
-	}
-	if autoscaler.Namespace != api.NamespaceDefault {
-		allErrs = append(allErrs, errs.NewFieldInvalid("namespace", autoscaler.Namespace, `namespace must be default`))
-	}
-	allErrs = append(allErrs, validateClusterAutoscalerSpec(autoscaler.Spec)...)
 	return allErrs
 }
 

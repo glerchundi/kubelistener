@@ -931,15 +931,10 @@ func (s *DockerServer) createExecContainer(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-
-	execID := s.generateID()
-	container.ExecIDs = append(container.ExecIDs, execID)
-
 	exec := docker.ExecInspect{
-		ID:        execID,
+		ID:        s.generateID(),
 		Container: *container,
 	}
-
 	var params docker.CreateExecOptions
 	err = json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
@@ -952,10 +947,6 @@ func (s *DockerServer) createExecContainer(w http.ResponseWriter, r *http.Reques
 			exec.ProcessConfig.Arguments = params.Cmd[1:]
 		}
 	}
-
-	exec.ProcessConfig.User = params.User
-	exec.ProcessConfig.Tty = params.Tty
-
 	s.execMut.Lock()
 	s.execs = append(s.execs, &exec)
 	s.execMut.Unlock()
@@ -966,7 +957,7 @@ func (s *DockerServer) createExecContainer(w http.ResponseWriter, r *http.Reques
 
 func (s *DockerServer) startExecContainer(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	if exec, err := s.getExec(id, false); err == nil {
+	if exec, err := s.getExec(id); err == nil {
 		s.execMut.Lock()
 		exec.Running = true
 		s.execMut.Unlock()
@@ -988,7 +979,7 @@ func (s *DockerServer) startExecContainer(w http.ResponseWriter, r *http.Request
 
 func (s *DockerServer) resizeExecContainer(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	if _, err := s.getExec(id, false); err == nil {
+	if _, err := s.getExec(id); err == nil {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -997,7 +988,7 @@ func (s *DockerServer) resizeExecContainer(w http.ResponseWriter, r *http.Reques
 
 func (s *DockerServer) inspectExecContainer(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	if exec, err := s.getExec(id, true); err == nil {
+	if exec, err := s.getExec(id); err == nil {
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(exec)
@@ -1006,15 +997,11 @@ func (s *DockerServer) inspectExecContainer(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func (s *DockerServer) getExec(id string, copy bool) (*docker.ExecInspect, error) {
+func (s *DockerServer) getExec(id string) (*docker.ExecInspect, error) {
 	s.execMut.RLock()
 	defer s.execMut.RUnlock()
 	for _, exec := range s.execs {
 		if exec.ID == id {
-			if copy {
-				cp := *exec
-				exec = &cp
-			}
 			return exec, nil
 		}
 	}

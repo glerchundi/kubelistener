@@ -102,9 +102,6 @@ type KubeletConfig struct {
 	// TLSClientConfig contains settings to enable transport layer security
 	TLSClientConfig
 
-	// Server requires Bearer authentication
-	BearerToken string
-
 	// HTTPTimeout is used by the client to timeout http requests to Kubelet.
 	HTTPTimeout time.Duration
 
@@ -269,9 +266,7 @@ func NegotiateVersion(client *Client, c *Config, version string, clientRegistere
 	}
 	apiVersions, err := client.ServerAPIVersions()
 	if err != nil {
-		// This is almost always a connection error, and higher level code should treat this as a generic error,
-		// not a negotiation specific error.
-		return "", err
+		return "", fmt.Errorf("couldn't read version from server: %v", err)
 	}
 	serverVersions := sets.String{}
 	for _, v := range apiVersions.Versions {
@@ -285,7 +280,7 @@ func NegotiateVersion(client *Client, c *Config, version string, clientRegistere
 	// If server does not support warn, but try to negotiate a lower version.
 	if len(version) != 0 {
 		if !clientVersions.Has(version) {
-			return "", fmt.Errorf("client does not support API version %q; client supported API versions: %v", version, clientVersions)
+			return "", fmt.Errorf("Client does not support API version '%s'. Client supported API versions: %v", version, clientVersions)
 
 		}
 		if serverVersions.Has(version) {
@@ -293,7 +288,7 @@ func NegotiateVersion(client *Client, c *Config, version string, clientRegistere
 		}
 		// If we are using an explicit config version the server does not support, fail.
 		if version == c.Version {
-			return "", fmt.Errorf("server does not support API version %q", version)
+			return "", fmt.Errorf("Server does not support API version '%s'.", version)
 		}
 	}
 
@@ -309,7 +304,7 @@ func NegotiateVersion(client *Client, c *Config, version string, clientRegistere
 			return clientVersion, nil
 		}
 	}
-	return "", fmt.Errorf("failed to negotiate an api version; server supports: %v, client supports: %v",
+	return "", fmt.Errorf("Failed to negotiate an api version. Server supports: %v. Client supports: %v.",
 		serverVersions, clientRegisteredVersions)
 }
 
@@ -334,7 +329,7 @@ func InClusterConfig() (*Config, error) {
 	tlsClientConfig := TLSClientConfig{}
 	rootCAFile := "/var/run/secrets/kubernetes.io/serviceaccount/" + api.ServiceAccountRootCAKey
 	if _, err := util.CertPoolFromFile(rootCAFile); err != nil {
-		glog.Errorf("Expected to load root CA config from %s, but got err: %v", rootCAFile, err)
+		glog.Errorf("expected to load root CA config from %s, but got err: %v", rootCAFile, err)
 	} else {
 		tlsClientConfig.CAFile = rootCAFile
 	}
@@ -358,7 +353,6 @@ func NewInCluster() (*Client, error) {
 
 // SetKubernetesDefaults sets default values on the provided client config for accessing the
 // Kubernetes API or returns an error if any of the defaults are impossible or invalid.
-// TODO: this method needs to be split into one that sets defaults per group, expected to be fix in PR "Refactoring clientcache.go and helper.go #14592"
 func SetKubernetesDefaults(config *Config) error {
 	if config.Prefix == "" {
 		config.Prefix = "/api"
@@ -479,9 +473,15 @@ func tlsTransportFor(config *Config) (http.RoundTripper, error) {
 	}
 
 	// Cache a single transport for these options
-	tlsTransports[key] = util.SetTransportDefaults(&http.Transport{
+	tlsTransports[key] = &http.Transport{
 		TLSClientConfig: tlsConfig,
-	})
+		Proxy:           http.ProxyFromEnvironment,
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
 	return tlsTransports[key], nil
 }
 
@@ -657,13 +657,4 @@ func DefaultKubernetesUserAgent() string {
 	seg := strings.SplitN(version, "-", 2)
 	version = seg[0]
 	return fmt.Sprintf("%s/%s (%s/%s) kubernetes/%s", path.Base(os.Args[0]), version, gruntime.GOOS, gruntime.GOARCH, commit)
-}
-
-// TimeoutFromListOptions returns timeout to be set via TimeoutSeconds() method
-// based on given options.
-func TimeoutFromListOptions(options api.ListOptions) time.Duration {
-	if options.TimeoutSeconds != nil {
-		return time.Duration(*options.TimeoutSeconds) * time.Second
-	}
-	return 0
 }

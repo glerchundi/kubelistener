@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -29,7 +28,6 @@ import (
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/util/strategicpatch"
 )
 
 // AnnotateOptions have the data required to perform the annotate operation
@@ -93,7 +91,7 @@ func NewCmdAnnotate(f *cmdutil.Factory, out io.Writer) *cobra.Command {
 			if err := options.Validate(args); err != nil {
 				cmdutil.CheckErr(cmdutil.UsageError(cmd, err.Error()))
 			}
-			if err := options.RunAnnotate(f); err != nil {
+			if err := options.RunAnnotate(); err != nil {
 				cmdutil.CheckErr(err)
 			}
 		},
@@ -169,43 +167,26 @@ func (o AnnotateOptions) Validate(args []string) error {
 }
 
 // RunAnnotate does the work
-func (o AnnotateOptions) RunAnnotate(f *cmdutil.Factory) error {
+func (o AnnotateOptions) RunAnnotate() error {
 	r := o.builder.Do()
 	if err := r.Err(); err != nil {
 		return err
 	}
-
 	return r.Visit(func(info *resource.Info, err error) error {
 		if err != nil {
 			return err
 		}
-
-		name, namespace, obj := info.Name, info.Namespace, info.Object
-		oldData, err := json.Marshal(obj)
-		if err != nil {
-			return err
+		_, uErr := cmdutil.UpdateObject(info, func(obj runtime.Object) error {
+			err := o.updateAnnotations(obj)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		if uErr != nil {
+			return uErr
 		}
-		if err := o.updateAnnotations(obj); err != nil {
-			return err
-		}
-		newData, err := json.Marshal(obj)
-		if err != nil {
-			return err
-		}
-		patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, obj)
-		if err != nil {
-			return err
-		}
-
-		mapping := info.ResourceMapping()
-		client, err := f.RESTClient(mapping)
-		if err != nil {
-			return err
-		}
-		helper := resource.NewHelper(client, mapping)
-
-		_, err = helper.Patch(namespace, name, api.StrategicMergePatchType, patchBytes)
-		return err
+		return nil
 	})
 }
 

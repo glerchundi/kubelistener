@@ -88,15 +88,6 @@ func TestSetDefaultDeployment(t *testing.T) {
 	defaultIntOrString := util.NewIntOrStringFromInt(1)
 	differentIntOrString := util.NewIntOrStringFromInt(5)
 	deploymentLabelKey := "deployment.kubernetes.io/podTemplateHash"
-	period := int64(v1.DefaultTerminationGracePeriodSeconds)
-	defaultTemplate := v1.PodTemplateSpec{
-		Spec: v1.PodSpec{
-			DNSPolicy:                     v1.DNSClusterFirst,
-			RestartPolicy:                 v1.RestartPolicyAlways,
-			SecurityContext:               &v1.PodSecurityContext{},
-			TerminationGracePeriodSeconds: &period,
-		},
-	}
 	tests := []struct {
 		original *Deployment
 		expected *Deployment
@@ -113,7 +104,6 @@ func TestSetDefaultDeployment(t *testing.T) {
 							MaxUnavailable: &defaultIntOrString,
 						},
 					},
-					Template:       defaultTemplate,
 					UniqueLabelKey: newString(deploymentLabelKey),
 				},
 			},
@@ -139,7 +129,6 @@ func TestSetDefaultDeployment(t *testing.T) {
 							MaxUnavailable: &defaultIntOrString,
 						},
 					},
-					Template:       defaultTemplate,
 					UniqueLabelKey: newString(deploymentLabelKey),
 				},
 			},
@@ -159,7 +148,6 @@ func TestSetDefaultDeployment(t *testing.T) {
 					Strategy: DeploymentStrategy{
 						Type: RecreateDeploymentStrategyType,
 					},
-					Template:       defaultTemplate,
 					UniqueLabelKey: newString(deploymentLabelKey),
 				},
 			},
@@ -180,7 +168,6 @@ func TestSetDefaultDeployment(t *testing.T) {
 					Strategy: DeploymentStrategy{
 						Type: RecreateDeploymentStrategyType,
 					},
-					Template:       defaultTemplate,
 					UniqueLabelKey: newString("customDeploymentKey"),
 				},
 			},
@@ -197,7 +184,7 @@ func TestSetDefaultDeployment(t *testing.T) {
 			t.FailNow()
 		}
 		if !reflect.DeepEqual(got.Spec, expected.Spec) {
-			t.Errorf("got different than expected:\n\t%+v\ngot:\n\t%+v", got.Spec, expected.Spec)
+			t.Errorf("got different than expected: %v, %v", got, expected)
 		}
 	}
 }

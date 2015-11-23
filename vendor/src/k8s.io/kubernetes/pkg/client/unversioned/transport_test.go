@@ -24,6 +24,13 @@ import (
 	"k8s.io/kubernetes/pkg/api/testapi"
 )
 
+func TestUnsecuredTLSTransport(t *testing.T) {
+	cfg := NewUnsafeTLSConfig()
+	if !cfg.InsecureSkipVerify {
+		t.Errorf("expected config to be insecure")
+	}
+}
+
 type testRoundTripper struct {
 	Request  *http.Request
 	Response *http.Response

@@ -32,7 +32,6 @@ import (
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/unversioned"
-	"k8s.io/kubernetes/pkg/api/validation"
 	"k8s.io/kubernetes/pkg/client/metrics"
 	"k8s.io/kubernetes/pkg/conversion/queryparams"
 	"k8s.io/kubernetes/pkg/fields"
@@ -150,10 +149,6 @@ func (r *Request) Resource(resource string) *Request {
 		r.err = fmt.Errorf("resource already set to %q, cannot change to %q", r.resource, resource)
 		return r
 	}
-	if ok, msg := validation.IsValidPathSegmentName(resource); !ok {
-		r.err = fmt.Errorf("invalid resource %q: %s", resource, msg)
-		return r
-	}
 	r.resource = resource
 	return r
 }
@@ -168,12 +163,6 @@ func (r *Request) SubResource(subresources ...string) *Request {
 	if len(r.subresource) != 0 {
 		r.err = fmt.Errorf("subresource already set to %q, cannot change to %q", r.resource, subresource)
 		return r
-	}
-	for _, s := range subresources {
-		if ok, msg := validation.IsValidPathSegmentName(s); !ok {
-			r.err = fmt.Errorf("invalid subresource %q: %s", s, msg)
-			return r
-		}
 	}
 	r.subresource = subresource
 	return r
@@ -192,10 +181,6 @@ func (r *Request) Name(resourceName string) *Request {
 		r.err = fmt.Errorf("resource name already set to %q, cannot change to %q", r.resourceName, resourceName)
 		return r
 	}
-	if ok, msg := validation.IsValidPathSegmentName(resourceName); !ok {
-		r.err = fmt.Errorf("invalid resource name %q: %s", resourceName, msg)
-		return r
-	}
 	r.resourceName = resourceName
 	return r
 }
@@ -207,10 +192,6 @@ func (r *Request) Namespace(namespace string) *Request {
 	}
 	if r.namespaceSet {
 		r.err = fmt.Errorf("namespace already set to %q, cannot change to %q", r.namespace, namespace)
-		return r
-	}
-	if ok, msg := validation.IsValidPathSegmentName(namespace); !ok {
-		r.err = fmt.Errorf("invalid namespace %q: %s", namespace, msg)
 		return r
 	}
 	r.namespaceSet = true
@@ -326,13 +307,13 @@ type versionToResourceToFieldMapping map[string]resourceTypeToFieldMapping
 func (v versionToResourceToFieldMapping) filterField(apiVersion, resourceType, field, value string) (newField, newValue string, err error) {
 	rMapping, ok := v[apiVersion]
 	if !ok {
-		glog.Warningf("Field selector: %v - %v - %v - %v: need to check if this is versioned correctly.", apiVersion, resourceType, field, value)
+		glog.Warningf("field selector: %v - %v - %v - %v: need to check if this is versioned correctly.", apiVersion, resourceType, field, value)
 		return field, value, nil
 	}
 	newField, newValue, err = rMapping.filterField(resourceType, field, value)
 	if err != nil {
 		// This is only a warning until we find and fix all of the client's usages.
-		glog.Warningf("Field selector: %v - %v - %v - %v: need to check if this is versioned correctly.", apiVersion, resourceType, field, value)
+		glog.Warningf("field selector: %v - %v - %v - %v: need to check if this is versioned correctly.", apiVersion, resourceType, field, value)
 		return field, value, nil
 	}
 	return newField, newValue, nil
@@ -341,33 +322,33 @@ func (v versionToResourceToFieldMapping) filterField(apiVersion, resourceType, f
 var fieldMappings = versionToResourceToFieldMapping{
 	"v1": resourceTypeToFieldMapping{
 		"nodes": clientFieldNameToAPIVersionFieldName{
-			ObjectNameField:   ObjectNameField,
-			NodeUnschedulable: NodeUnschedulable,
+			ObjectNameField:   "metadata.name",
+			NodeUnschedulable: "spec.unschedulable",
 		},
 		"pods": clientFieldNameToAPIVersionFieldName{
-			PodHost:   PodHost,
-			PodStatus: PodStatus,
+			PodHost:   "spec.nodeName",
+			PodStatus: "status.phase",
 		},
 		"secrets": clientFieldNameToAPIVersionFieldName{
-			SecretType: SecretType,
+			SecretType: "type",
 		},
 		"serviceAccounts": clientFieldNameToAPIVersionFieldName{
-			ObjectNameField: ObjectNameField,
+			ObjectNameField: "metadata.name",
 		},
 		"endpoints": clientFieldNameToAPIVersionFieldName{
-			ObjectNameField: ObjectNameField,
+			ObjectNameField: "metadata.name",
 		},
 		"events": clientFieldNameToAPIVersionFieldName{
-			ObjectNameField:              ObjectNameField,
-			EventReason:                  EventReason,
-			EventSource:                  EventSource,
-			EventInvolvedKind:            EventInvolvedKind,
-			EventInvolvedNamespace:       EventInvolvedNamespace,
-			EventInvolvedName:            EventInvolvedName,
-			EventInvolvedUID:             EventInvolvedUID,
-			EventInvolvedAPIVersion:      EventInvolvedAPIVersion,
-			EventInvolvedResourceVersion: EventInvolvedResourceVersion,
-			EventInvolvedFieldPath:       EventInvolvedFieldPath,
+			ObjectNameField:              "metadata.name",
+			EventReason:                  "reason",
+			EventSource:                  "source",
+			EventInvolvedKind:            "involvedObject.kind",
+			EventInvolvedNamespace:       "involvedObject.namespace",
+			EventInvolvedName:            "involvedObject.name",
+			EventInvolvedUID:             "involvedObject.uid",
+			EventInvolvedAPIVersion:      "involvedObject.apiVersion",
+			EventInvolvedResourceVersion: "involvedObject.resourceVersion",
+			EventInvolvedFieldPath:       "involvedObject.fieldPath",
 		},
 	},
 }
@@ -475,19 +456,6 @@ func (r *Request) Timeout(d time.Duration) *Request {
 		return r
 	}
 	r.timeout = d
-	return r
-}
-
-// Timeout makes the request use the given duration as a timeout. Sets the "timeoutSeconds"
-// parameter.
-func (r *Request) TimeoutSeconds(d time.Duration) *Request {
-	if r.err != nil {
-		return r
-	}
-	if d != 0 {
-		timeout := int64(d.Seconds())
-		r.Param("timeoutSeconds", strconv.FormatInt(timeout, 10))
-	}
 	return r
 }
 
@@ -670,7 +638,7 @@ func (r *Request) Stream() (io.ReadCloser, error) {
 }
 
 // request connects to the server and invokes the provided function when a server response is
-// received. It handles retry behavior and up front validation of requests. It will invoke
+// received. It handles retry behavior and up front validation of requests. It wil invoke
 // fn at most once. It will return an error if a problem occurred prior to connecting to the
 // server - the provided function is responsible for handling server errors.
 func (r *Request) request(fn func(*http.Request, *http.Response)) error {

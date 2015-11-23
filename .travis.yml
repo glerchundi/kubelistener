@@ -3,7 +3,7 @@ go:
   - 1.5
   - tip
 script:
-  - make
+  - make static
 deploy:
   provider: releases
   skip_cleanup: true

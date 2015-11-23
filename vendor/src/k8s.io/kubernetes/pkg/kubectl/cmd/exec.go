@@ -40,7 +40,7 @@ $ kubectl exec 123456-7890 date
 # Get output from running 'date' in ruby-container from pod 123456-7890
 $ kubectl exec 123456-7890 -c ruby-container date
 
-# Switch to raw terminal mode, sends stdin to 'bash' in ruby-container from pod 123456-7890
+# Switch to raw terminal mode, sends stdin to 'bash' in ruby-container from pod 123456-780
 # and sends stdout/stderr from 'bash' back to the client
 $ kubectl exec 123456-7890 -c ruby-container -i -t -- bash -il`
 )
@@ -59,8 +59,7 @@ func NewCmdExec(f *cmdutil.Factory, cmdIn io.Reader, cmdOut, cmdErr io.Writer) *
 		Long:    "Execute a command in a container.",
 		Example: exec_example,
 		Run: func(cmd *cobra.Command, args []string) {
-			argsLenAtDash := cmd.ArgsLenAtDash()
-			cmdutil.CheckErr(options.Complete(f, cmd, args, argsLenAtDash))
+			cmdutil.CheckErr(options.Complete(f, cmd, args))
 			cmdutil.CheckErr(options.Validate())
 			cmdutil.CheckErr(options.Run())
 		},
@@ -108,9 +107,8 @@ type ExecOptions struct {
 }
 
 // Complete verifies command line arguments and loads data from the command environment
-func (p *ExecOptions) Complete(f *cmdutil.Factory, cmd *cobra.Command, argsIn []string, argsLenAtDash int) error {
-	// Let kubectl exec follow rules for `--`, see #13004 issue
-	if len(p.PodName) == 0 && (len(argsIn) == 0 || argsLenAtDash == 0) {
+func (p *ExecOptions) Complete(f *cmdutil.Factory, cmd *cobra.Command, argsIn []string) error {
+	if len(p.PodName) == 0 && len(argsIn) == 0 {
 		return cmdutil.UsageError(cmd, "POD is required for exec")
 	}
 	if len(p.PodName) != 0 {

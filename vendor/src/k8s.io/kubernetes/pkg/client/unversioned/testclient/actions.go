@@ -19,7 +19,6 @@ package testclient
 import (
 	"strings"
 
-	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
@@ -101,25 +100,6 @@ func NewUpdateAction(resource, namespace string, object runtime.Object) UpdateAc
 	return action
 }
 
-func NewRootPatchAction(resource string, object runtime.Object) PatchActionImpl {
-	action := PatchActionImpl{}
-	action.Verb = "patch"
-	action.Resource = resource
-	action.Object = object
-
-	return action
-}
-
-func NewPatchAction(resource, namespace string, object runtime.Object) PatchActionImpl {
-	action := PatchActionImpl{}
-	action.Verb = "patch"
-	action.Resource = resource
-	action.Namespace = namespace
-	action.Object = object
-
-	return action
-}
-
 func NewUpdateSubresourceAction(resource, subresource, namespace string, object runtime.Object) UpdateActionImpl {
 	action := UpdateActionImpl{}
 	action.Verb = "update"
@@ -150,21 +130,21 @@ func NewDeleteAction(resource, namespace, name string) DeleteActionImpl {
 	return action
 }
 
-func NewRootWatchAction(resource string, label labels.Selector, field fields.Selector, opts api.ListOptions) WatchActionImpl {
+func NewRootWatchAction(resource string, label labels.Selector, field fields.Selector, resourceVersion string) WatchActionImpl {
 	action := WatchActionImpl{}
 	action.Verb = "watch"
 	action.Resource = resource
-	action.WatchRestrictions = WatchRestrictions{label, field, opts.ResourceVersion}
+	action.WatchRestrictions = WatchRestrictions{label, field, resourceVersion}
 
 	return action
 }
 
-func NewWatchAction(resource, namespace string, label labels.Selector, field fields.Selector, opts api.ListOptions) WatchActionImpl {
+func NewWatchAction(resource, namespace string, label labels.Selector, field fields.Selector, resourceVersion string) WatchActionImpl {
 	action := WatchActionImpl{}
 	action.Verb = "watch"
 	action.Resource = resource
 	action.Namespace = namespace
-	action.WatchRestrictions = WatchRestrictions{label, field, opts.ResourceVersion}
+	action.WatchRestrictions = WatchRestrictions{label, field, resourceVersion}
 
 	return action
 }
@@ -306,15 +286,6 @@ type UpdateActionImpl struct {
 }
 
 func (a UpdateActionImpl) GetObject() runtime.Object {
-	return a.Object
-}
-
-type PatchActionImpl struct {
-	ActionImpl
-	Object runtime.Object
-}
-
-func (a PatchActionImpl) GetObject() runtime.Object {
 	return a.Object
 }
 

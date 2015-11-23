@@ -35,7 +35,7 @@ import (
 	qosutil "k8s.io/kubernetes/pkg/kubelet/qos/util"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/types"
-	deploymentutil "k8s.io/kubernetes/pkg/util/deployment"
+	deploymentUtil "k8s.io/kubernetes/pkg/util/deployment"
 	"k8s.io/kubernetes/pkg/util/sets"
 )
 
@@ -73,6 +73,7 @@ func describerMap(c *client.Client) map[string]Describer {
 		"Secret":                &SecretDescriber{c},
 		"Service":               &ServiceDescriber{c},
 		"ServiceAccount":        &ServiceAccountDescriber{c},
+		"Minion":                &NodeDescriber{c},
 		"Node":                  &NodeDescriber{c},
 		"LimitRange":            &LimitRangeDescriber{c},
 		"ResourceQuota":         &ResourceQuotaDescriber{c},
@@ -151,11 +152,11 @@ func (d *NamespaceDescriber) Describe(namespace, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resourceQuotaList, err := d.ResourceQuotas(name).List(labels.Everything(), fields.Everything())
+	resourceQuotaList, err := d.ResourceQuotas(name).List(labels.Everything())
 	if err != nil {
 		return "", err
 	}
-	limitRangeList, err := d.LimitRanges(name).List(labels.Everything(), fields.Everything())
+	limitRangeList, err := d.LimitRanges(name).List(labels.Everything())
 	if err != nil {
 		return "", err
 	}
@@ -724,19 +725,6 @@ func describeContainers(pod *api.Pod, out io.Writer) {
 		fmt.Fprintf(out, "    Container ID:\t%s\n", status.ContainerID)
 		fmt.Fprintf(out, "    Image:\t%s\n", container.Image)
 		fmt.Fprintf(out, "    Image ID:\t%s\n", status.ImageID)
-
-		if len(container.Command) > 0 {
-			fmt.Fprintf(out, "    Command:\n")
-			for _, c := range container.Command {
-				fmt.Fprintf(out, "      %s\n", c)
-			}
-		}
-		if len(container.Args) > 0 {
-			fmt.Fprintf(out, "    Args:\n")
-			for _, arg := range container.Args {
-				fmt.Fprintf(out, "      %s\n", arg)
-			}
-		}
 
 		resourceToQoS := qosutil.GetQoS(&container)
 		if len(resourceToQoS) > 0 {
@@ -1308,12 +1296,8 @@ func (d *HorizontalPodAutoscalerDescriber) Describe(namespace, name string) (str
 				fmt.Fprintf(out, "<not available>\n")
 			}
 		}
-		minReplicas := "<unset>"
-		if hpa.Spec.MinReplicas != nil {
-			minReplicas = fmt.Sprintf("%d", *hpa.Spec.MinReplicas)
-		}
-		fmt.Fprintf(out, "Min replicas:\t%s\n", minReplicas)
-		fmt.Fprintf(out, "Max replicas:\t%d\n", hpa.Spec.MaxReplicas)
+		fmt.Fprintf(out, "Min pods:\t%d\n", hpa.Spec.MinReplicas)
+		fmt.Fprintf(out, "Max pods:\t%d\n", hpa.Spec.MaxReplicas)
 
 		// TODO: switch to scale subresource once the required code is submitted.
 		if strings.ToLower(hpa.Spec.ScaleRef.Kind) == "replicationcontroller" {
@@ -1468,11 +1452,11 @@ func (dd *DeploymentDescriber) Describe(namespace, name string) (string, error) 
 			ru := d.Spec.Strategy.RollingUpdate
 			fmt.Fprintf(out, "RollingUpdateStrategy:\t%s max unavailable, %s max surge, %d min ready seconds\n", ru.MaxUnavailable.String(), ru.MaxSurge.String(), ru.MinReadySeconds)
 		}
-		oldRCs, err := deploymentutil.GetOldRCs(*d, dd)
+		oldRCs, err := deploymentUtil.GetOldRCs(*d, dd)
 		if err == nil {
 			fmt.Fprintf(out, "OldReplicationControllers:\t%s\n", printReplicationControllersByLabels(oldRCs))
 		}
-		newRC, err := deploymentutil.GetNewRC(*d, dd)
+		newRC, err := deploymentUtil.GetNewRC(*d, dd)
 		if err == nil {
 			var newRCs []*api.ReplicationController
 			if newRC != nil {
@@ -1496,7 +1480,7 @@ func (dd *DeploymentDescriber) Describe(namespace, name string) (string, error) 
 func getDaemonSetsForLabels(c client.DaemonSetInterface, labelsToMatch labels.Labels) ([]extensions.DaemonSet, error) {
 	// Get all daemon sets
 	// TODO: this needs a namespace scope as argument
-	dss, err := c.List(labels.Everything(), fields.Everything())
+	dss, err := c.List(labels.Everything())
 	if err != nil {
 		return nil, fmt.Errorf("error getting daemon set: %v", err)
 	}
@@ -1519,7 +1503,7 @@ func getDaemonSetsForLabels(c client.DaemonSetInterface, labelsToMatch labels.La
 func getReplicationControllersForLabels(c client.ReplicationControllerInterface, labelsToMatch labels.Labels) ([]api.ReplicationController, error) {
 	// Get all replication controllers.
 	// TODO this needs a namespace scope as argument
-	rcs, err := c.List(labels.Everything(), fields.Everything())
+	rcs, err := c.List(labels.Everything())
 	if err != nil {
 		return nil, fmt.Errorf("error getting replication controllers: %v", err)
 	}

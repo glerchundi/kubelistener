@@ -29,7 +29,7 @@ var (
 		"perf_event": &PerfEventGroup{},
 		"freezer":    &FreezerGroup{},
 	}
-	CgroupProcesses  = "cgroup.procs"
+	CgroupProcesses = "cgroup.procs"
 	HugePageSizes, _ = cgroups.GetHugePageSize()
 )
 
@@ -304,10 +304,6 @@ func removePath(p string, err error) error {
 func CheckCpushares(path string, c int64) error {
 	var cpuShares int64
 
-	if c == 0 {
-		return nil
-	}
-
 	fd, err := os.Open(filepath.Join(path, "cpu.shares"))
 	if err != nil {
 		return err
@@ -318,11 +314,12 @@ func CheckCpushares(path string, c int64) error {
 	if err != nil && err != io.EOF {
 		return err
 	}
-
-	if c > cpuShares {
-		return fmt.Errorf("The maximum allowed cpu-shares is %d", cpuShares)
-	} else if c < cpuShares {
-		return fmt.Errorf("The minimum allowed cpu-shares is %d", cpuShares)
+	if c != 0 {
+		if c > cpuShares {
+			return fmt.Errorf("The maximum allowed cpu-shares is %d", cpuShares)
+		} else if c < cpuShares {
+			return fmt.Errorf("The minimum allowed cpu-shares is %d", cpuShares)
+		}
 	}
 
 	return nil

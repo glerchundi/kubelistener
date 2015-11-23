@@ -339,7 +339,7 @@ func TestLabelForResourceFromFile(t *testing.T) {
 					t.Fatalf("unexpected request: %#v\n%#v", req.URL, req)
 					return nil, nil
 				}
-			case "PATCH":
+			case "PUT":
 				switch req.URL.Path {
 				case "/namespaces/test/pods/cassandra":
 					return &http.Response{StatusCode: 200, Body: objBody(codec, &pods.Items[0])}, nil
@@ -386,7 +386,7 @@ func TestLabelMultipleObjects(t *testing.T) {
 					t.Fatalf("unexpected request: %#v\n%#v", req.URL, req)
 					return nil, nil
 				}
-			case "PATCH":
+			case "PUT":
 				switch req.URL.Path {
 				case "/namespaces/test/pods/foo":
 					return &http.Response{StatusCode: 200, Body: objBody(codec, &pods.Items[0])}, nil
