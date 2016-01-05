@@ -1,5 +1,3 @@
 *.iml
 .DS_Store
-Godeps/_workspace
 bin/*
-pkg/*

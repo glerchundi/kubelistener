@@ -11,29 +11,28 @@ all: build
 
 build:
 	@echo "Building kubelistener..."
-	gb build all
+	GO15VENDOREXPERIMENT=1 go build -o $$ROOTPATH/bin/kubelistener
 
 test:
 	@echo "Running tests..."
-	gb test
+	GO15VENDOREXPERIMENT=1 go test
 
 static:
 	ROOTPATH=$(shell pwd -P); \
 	mkdir -p $$ROOTPATH/bin; \
-	cd $$ROOTPATH/src/github.com/glerchundi/kubelistener; \
-	GOPATH=$$ROOTPATH/vendor:$$ROOTPATH \
+	GO15VENDOREXPERIMENT=1 \
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-	  go build \
-	    -a -tags netgo -installsuffix cgo -ldflags '-extld ld -extldflags -static' -a -x \
-	    -o $$ROOTPATH/bin/kubelistener-linux-amd64 \
-	    . \
+	go build \
+		-a -tags netgo -installsuffix cgo -ldflags '-extld ld -extldflags -static' -a -x \
+		-o $$ROOTPATH/bin/kubelistener-linux-amd64 \
+		. \
 	; \
-	GOPATH=$$ROOTPATH/vendor:$$ROOTPATH \
+	GO15VENDOREXPERIMENT=1 \
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
-	  go build \
-	    -a -tags netgo -installsuffix cgo -ldflags '-extld ld -extldflags -static' -a -x \
-	    -o $$ROOTPATH/bin/kubelistener-darwin-amd64 \
-	    . \
+	go build \
+		-a -tags netgo -installsuffix cgo -ldflags '-extld ld -extldflags -static' -a -x \
+		-o $$ROOTPATH/bin/kubelistener-darwin-amd64 \
+		.
 
 container: static
 	docker build -t $(PREFIX)/kubelistener:$(VERSION) .
