@@ -11,6 +11,7 @@ all: build
 
 build:
 	@echo "Building kubelistener..."
+	ROOTPATH=$(shell pwd -P); \
 	GO15VENDOREXPERIMENT=1 go build -o $$ROOTPATH/bin/kubelistener
 
 test:
@@ -25,13 +26,6 @@ static:
 	go build \
 		-a -tags netgo -installsuffix cgo -ldflags '-extld ld -extldflags -static' -a -x \
 		-o $$ROOTPATH/bin/kubelistener-linux-amd64 \
-		. \
-	; \
-	GO15VENDOREXPERIMENT=1 \
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
-	go build \
-		-a -tags netgo -installsuffix cgo -ldflags '-extld ld -extldflags -static' -a -x \
-		-o $$ROOTPATH/bin/kubelistener-darwin-amd64 \
 		.
 
 container: static

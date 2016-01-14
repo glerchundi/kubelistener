@@ -28,10 +28,10 @@ type Client struct {
 	headers http.Header
 	baseURL string
 	// user-provided configuration
-	config *Config
+	config *ClientConfig
 }
 
-type Config struct {
+type ClientConfig struct {
 	MasterURL string
 	Auth ClientAuth
 	CaCertificate []byte
@@ -59,8 +59,8 @@ type Informer struct {
 	httpClient *http.Client
 	httpReq *http.Request
 	wsConfig *websocket.Config
-	// inherited config
-	interval time.Duration
+	// user-provided configuration
+	config *InformerConfig
 	// inter-routine comm.
 	rc resourceCreator
 	funnelChan chan interface{}
@@ -70,20 +70,38 @@ type Informer struct {
 	errChan chan error
 }
 
+type InformerConfig struct {
+	Namespace string
+	Resource string
+	Selector string
+	ResyncInterval time.Duration
+	Processor func(interface{})
+}
+
 type resourceCreator interface {
 	item() kruntime.Object
 	list() kruntime.Object
 }
+
+type podCreator struct {}
+func (*podCreator) item() kruntime.Object { return &kapi.Pod{} }
+func (*podCreator) list() kruntime.Object { return &kapi.PodList{} }
+
+type replicationControllerCreator struct {}
+func (*replicationControllerCreator) item() kruntime.Object { return &kapi.ReplicationController{} }
+func (*replicationControllerCreator) list() kruntime.Object { return &kapi.ReplicationControllerList{} }
 
 type serviceCreator struct {}
 func (*serviceCreator) item() kruntime.Object { return &kapi.Service{} }
 func (*serviceCreator) list() kruntime.Object { return &kapi.ServiceList{} }
 
 var resourceCreatorMap = map[string]resourceCreator {
+	"pods": &podCreator{},
+	"replicationcontrollers": &replicationControllerCreator{},
 	"services": &serviceCreator{},
 }
 
-func NewClient(config *Config) (*Client, error) {
+func NewClient(config *ClientConfig) (*Client, error) {
 	client := &Client{config: config}
 
 	masterURL := config.MasterURL
@@ -158,10 +176,24 @@ func NewClient(config *Config) (*Client, error) {
 	return client, nil
 }
 
-func (c *Client) NewInformer(namespace, resource, selector string, resyncInterval time.Duration,
+func (c *Client) NewInformer(config *InformerConfig,
                              stopChan <-chan struct{}, doneChan chan bool, errChan chan error) (*Informer, error) {
+	// Check if a processor was provided
+	if config.Processor == nil {
+		return nil, fmt.Errorf("no processor was provided")
+	}
+
+	// Use POD_NAMESPACE as default value or fallback to "default"
+	namespace := config.Namespace
+	if namespace == "" {
+		namespace = os.Getenv("POD_NAMESPACE")
+		if namespace == "" {
+			namespace = "default"
+		}
+	}
+
 	// HTTP Client
-	httpURL := c.getResourcesURL("http", namespace, resource, false)
+	httpURL := c.getResourcesURL("http", namespace, config.Resource, false)
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: c.tls,
@@ -175,19 +207,24 @@ func (c *Client) NewInformer(namespace, resource, selector string, resyncInterva
 	httpReq.Header = c.headers
 
 	// WebSocket Client
-	wsURL := c.getResourcesURL("ws", namespace, resource, true)
+	wsURL := c.getResourcesURL("ws", namespace, config.Resource, true)
 	wsConfig, err := websocket.NewConfig(wsURL, "http://localhost"); if err != nil {
 		return nil, err
 	}
 	wsConfig.TlsConfig = c.tls
 	wsConfig.Header = c.headers
 
+	resourceCreator, ok := resourceCreatorMap[config.Resource]
+	if !ok {
+		return nil, fmt.Errorf("'%s' is not a valid resource type", config.Resource)
+	}
+
 	// Return informer
 	return &Informer{
 		httpClient, httpReq,
 		wsConfig,
-		resyncInterval,
-		resourceCreatorMap[resource],
+		config,
+		resourceCreator,
 		make(chan interface{}, 100),
 		stopChan, doneChan, errChan,
 	}, nil
@@ -265,22 +302,9 @@ func (i *Informer) list() {
 		select {
 		case <-i.stopChan:
 			break
-		case <-time.After(i.interval):
+		case <-time.After(i.config.ResyncInterval):
 			continue
 		}
-	}
-}
-
-func (i *Informer) process(v interface{}) {
-	switch vv := v.(type) {
-	case *kapi.Service:
-		fmt.Printf("*SERVICE:     %v\n\n", vv)
-	case *kapi.ServiceList:
-		fmt.Printf("*SERVICELIST: %v\n\n", vv)
-	case *kapi.WatchEvent:
-		fmt.Printf("*WATCHEVENT:  %v\n", vv)
-	default:
-		fmt.Printf("DEFAULT:      %v\n\n", vv)
 	}
 }
 
@@ -310,7 +334,7 @@ func (i *Informer) Run() {
 		for {
 			select {
 			case v := <-i.funnelChan:
-				i.process(v)
+				i.config.Processor(v)
 			}
 		}
 	}()

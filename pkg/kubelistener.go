@@ -1,25 +1,8 @@
-/*
-Copyright 2014 The Kubernetes Authors All rights reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-// kubelistener listens to kubernetes events. This is useful for bridge them
-// into your concrete system.
-package kubelistener
+package pkg
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -27,18 +10,16 @@ import (
 	"syscall"
 	"time"
 
-	k8s "github.com/glerchundi/kubelistener/pkg/client"
+	kclient "github.com/glerchundi/kubelistener/pkg/client"
+	kapi "github.com/glerchundi/kubelistener/pkg/client/api/v1"
 	"github.com/glerchundi/kubelistener/pkg/util"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 )
 
-type Listener interface {
-	Event()
-}
-
 type Config struct {
 	KubeMasterURL string
+	Namespace string
 	Resource string
 	Selector string
 	ResyncInterval time.Duration
@@ -50,6 +31,7 @@ type Config struct {
 func NewConfig() *Config {
 	return &Config{
 		KubeMasterURL: "",
+		Namespace: "",
 		Resource: "services",
 		Selector: "",
 		ResyncInterval: 30 * time.Minute,
@@ -59,7 +41,7 @@ func NewConfig() *Config {
 	}
 }
 
-type kubelistener struct {
+type KubeListener struct {
 	// Configuration
 	config *Config
 	// Writer for 'add' events
@@ -70,7 +52,25 @@ type kubelistener struct {
 	deleteWriter io.Writer
 }
 
-func Run(config *Config) {
+func NewKubeListener(config *Config) *KubeListener {
+	return &KubeListener{config:config}
+}
+
+func process(v interface{}) {
+	switch vv := v.(type) {
+		case *kapi.Service:
+		fmt.Printf("*SERVICE:     %v\n\n", vv)
+		case *kapi.ServiceList:
+		fmt.Printf("*SERVICELIST: %v\n\n", vv)
+		case *kapi.WatchEvent:
+		fmt.Printf("*WATCHEVENT:  %v\n", vv)
+		fmt.Printf("*WATCHEVENT (VALUE): %v\n", vv.Object)
+		default:
+		fmt.Printf("DEFAULT:      %v\n\n", vv)
+	}
+}
+
+func (kl *KubeListener) Run() {
 	// Initialize logs
 	util.InitLogs()
 	defer util.FlushLogs()
@@ -92,12 +92,12 @@ func Run(config *Config) {
 	}
 
 	// Create new k8s client
-	kubeConfig := &k8s.Config{
-		MasterURL: config.KubeMasterURL,
-		Auth: &k8s.TokenAuth{ string(serviceAccountToken) },
+	kubeConfig := &kclient.ClientConfig{
+		MasterURL: kl.config.KubeMasterURL,
+		Auth: &kclient.TokenAuth{ string(serviceAccountToken) },
 		CaCertificate: caCertificate,
 	}
-	kubeClient, err := k8s.NewClient(kubeConfig)
+	kubeClient, err := kclient.NewClient(kubeConfig)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -108,8 +108,15 @@ func Run(config *Config) {
 	errChan := make(chan error, 10)
 
 	// Create informer from client
+	informerConfig := &kclient.InformerConfig{
+		Namespace: kl.config.Namespace,
+		Resource: kl.config.Resource,
+		Selector: kl.config.Selector,
+		ResyncInterval: kl.config.ResyncInterval,
+		Processor: process,
+	}
 	i, err := kubeClient.NewInformer(
-		"default", config.Resource, config.Selector, config.ResyncInterval,
+		informerConfig,
 		stopChan, doneChan, errChan,
 	)
 

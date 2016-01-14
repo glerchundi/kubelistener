@@ -4,7 +4,7 @@ import (
 	"strings"
 	"os"
 
-	kubelistener "github.com/glerchundi/kubelistener/pkg"
+	"github.com/glerchundi/kubelistener/pkg"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 )
@@ -15,11 +15,12 @@ const (
 )
 
 var (
-	cfg = kubelistener.NewConfig()
+	cfg = pkg.NewConfig()
 )
 
-func AddConfigFlags(fs *flag.FlagSet, c *kubelistener.Config) {
+func AddConfigFlags(fs *flag.FlagSet, c *pkg.Config) {
 	fs.StringVar(&c.KubeMasterURL, "kube-master-url", c.KubeMasterURL, "URL to reach kubernetes master. Env variables in this flag will be expanded.")
+	fs.StringVar(&c.Namespace, "namespace", c.Namespace, "If present, the namespace scope.")
 	fs.StringVar(&c.Resource, "resource", c.Resource, "Which resource to watch.")
 	fs.StringVar(&c.Selector, "selector", c.Selector, "Filter resources by a user-provided selector.")
 	fs.DurationVar(&c.ResyncInterval, "resync-interval", c.ResyncInterval, "Resync with kubernetes master every user-defined interval.")
@@ -75,5 +76,6 @@ func run(cmd *cobra.Command, args []string) {
 	setFromEnvs(cliName, cmd.PersistentFlags())
 
 	// and then, run!
-	kubelistener.Run(cfg)
+	kl := pkg.NewKubeListener(cfg)
+	kl.Run()
 }
