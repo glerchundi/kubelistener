@@ -8,9 +8,6 @@ import:
   repo: https://github.com/cpuguy83/go-md2man
   subpackages:
   - md2man
-- package: github.com/golang/glog
-  version: 44145f04b68cf362d9c4df2182967c2275eaefed
-  repo: https://github.com/golang/glog
 - package: github.com/hashicorp/hcl
   version: 17c5c97b5a51e82c238678127e413b7635c6d5f6
   repo: https://github.com/hashicorp/hcl
@@ -74,3 +71,4 @@ import:
   - pkg/client/api/v1
   - pkg/client/runtime
   - pkg/util
+- package: github.com/glerchundi/glog
