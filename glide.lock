@@ -1,93 +1,38 @@
-hash: 364e6f6db3619a35903e359468a520820fd6f137d310e7b556e558ef804a2648
-updated: 2016-01-18T13:30:57.830006695+01:00
+hash: 3798b43dfc3fec47df9f00dc7ec98c383e076c6ef6ae046bf12331d7fdfb2d6c
+updated: 2016-01-19T12:34:29.011798532+01:00
 imports:
-- name: github.com/armon/consul-api
-  version: dcfedd50ed5334f96adee43fc88518a4f095e15c
-- name: github.com/BurntSushi/toml
-  version: ""
-  repo: https://github.com/BurntSushi/toml
-- name: github.com/coreos/go-etcd
-  version: 003851be7bb0694fe3cc457a49529a19388ee7cf
-- name: github.com/cpuguy83/go-md2man
-  version: ""
-  repo: https://github.com/cpuguy83/go-md2man
+- name: github.com/davecgh/go-spew
+  version: 2df174808ee097f90d259e432cc04442cf60be21
   subpackages:
-  - md2man
-- name: github.com/glerchundi/glog
-  version: 865eefd905cc23cb2a8ddf5dfd85fa6c29b92536
-- name: github.com/glerchundi/kubelistener
-  version: 4a8cd8599e8c84bf1168f6daee84e1b16b424e74
+  - spew
+- name: github.com/glerchundi/logrus
+  version: 39dd9c24b9e7561aa92cc6f54b5f4fbad5b2df17
+- name: github.com/pmezard/go-difflib
+  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
   subpackages:
-  - /pkg
-  - pkg/client
-  - pkg/client/api/unversioned
-  - pkg/client/api/v1
-  - pkg/client/runtime
-  - pkg/util
-- name: github.com/golang/glog
-  version: 44145f04b68cf362d9c4df2182967c2275eaefed
-  repo: https://github.com/golang/glog
-- name: github.com/hashicorp/hcl
-  version: ""
-  repo: https://github.com/hashicorp/hcl
-- name: github.com/inconshreveable/mousetrap
-  version: ""
-  repo: https://github.com/inconshreveable/mousetrap
-- name: github.com/kr/pretty
-  version: ""
-  repo: https://github.com/kr/pretty
-- name: github.com/kr/pty
-  version: f7ee69f31298ecbe5d2b349c711e2547a617d398
-- name: github.com/kr/text
-  version: ""
-  repo: https://github.com/kr/text
-- name: github.com/magiconair/properties
-  version: ""
-  repo: https://github.com/magiconair/properties
-- name: github.com/mitchellh/mapstructure
-  version: ""
-  repo: https://github.com/mitchellh/mapstructure
-- name: github.com/russross/blackfriday
-  version: ""
-  repo: https://github.com/russross/blackfriday
-- name: github.com/shurcooL/sanitized_anchor_name
-  version: ""
-  repo: https://github.com/shurcooL/sanitized_anchor_name
-- name: github.com/spf13/cast
-  version: ""
-  repo: https://github.com/spf13/cast
-- name: github.com/spf13/cobra
-  version: ""
-  repo: https://github.com/spf13/cobra
-- name: github.com/spf13/jwalterweatherman
-  version: ""
-  repo: https://github.com/spf13/jwalterweatherman
+  - difflib
+- name: github.com/Sirupsen/logrus
+  version: f7f79f729e0fbe2fcc061db48a9ba0263f588252
 - name: github.com/spf13/pflag
-  version: ""
-  repo: https://github.com/spf13/pflag
-- name: github.com/spf13/viper
-  version: ""
-  repo: https://github.com/spf13/viper
-- name: github.com/ugorji/go
-  version: 646ae4a518c1c3be0739df898118d9bccf993858
-- name: github.com/xordataexchange/crypt
-  version: 749e360c8f236773f28fc6d3ddfce4a470795227
+  version: 7f60f83a2c81bc3c3c0d5297f61ddfa68da9d3b7
+- name: github.com/stretchr/objx
+  version: cbeaeb16a013161a98496fad62933b1d21786672
+- name: github.com/stretchr/testify
+  version: f390dcf405f7b83c997eac1b06768bb9f44dec18
+  subpackages:
+  - /assert
 - name: golang.org/x/crypto
   version: 3760e016850398b85094c4c99e955b8c3dea5711
 - name: golang.org/x/net
-  version: ""
-  repo: https://go.googlesource.com/net
+  version: 72aa00c6241a8013dc9b040abb45f57edbe73945
   subpackages:
-  - context
-  - websocket
-  - context/ctxhttp
-- name: gopkg.in/fsnotify.v1
-  version: ""
-  repo: https://gopkg.in/fsnotify.v1
-- name: gopkg.in/yaml.v2
-  version: ""
-  repo: https://gopkg.in/yaml.v2
+  - /context
+- name: golang.org/x/text
+  version: cf4986612c83df6c55578ba198316d1684a9a287
+- name: gopkg.in/airbrake/gobrake.v2
+  version: c9d51adc624b5cc4c1bf8de730a09af4878ffe2d
+- name: gopkg.in/gemnasium/logrus-airbrake-hook.v2
+  version: 31e6fd4bd5a98d8ee7673d24bc54ec73c31810dd
 - name: speter.net/go/exp/math/dec/inf
-  version: ""
-  repo: https://code.google.com/p/go-decimal-inf.exp
+  version: 42ca6cd68aa922bc3f32f1e056e61b65945d9ad7
 devImports: []

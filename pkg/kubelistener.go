@@ -1,7 +1,6 @@
 package pkg
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,11 +9,9 @@ import (
 	"syscall"
 	"time"
 
+	log "github.com/glerchundi/logrus"
 	kclient "github.com/glerchundi/kubelistener/pkg/client"
 	kapi "github.com/glerchundi/kubelistener/pkg/client/api/v1"
-	"github.com/glerchundi/kubelistener/pkg/util"
-	"github.com/golang/glog"
-	"github.com/spf13/pflag"
 )
 
 type Config struct {
@@ -71,24 +68,16 @@ func process(v interface{}) {
 }
 
 func (kl *KubeListener) Run() {
-	// Initialize logs
-	util.InitLogs()
-	defer util.FlushLogs()
-
-	// Configure logging.
-	logLevel := pflag.Lookup("log-level")
-	flag.Set("v", logLevel.Value.String())
-
 	// Get service account token
 	serviceAccountToken, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
 	if err != nil {
-		glog.Fatal(err)
+		log.Fatal(err)
 	}
 
 	// Get CA certificate data
 	caCertificate, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
 	if err != nil {
-		glog.Fatal(err)
+		log.Fatal(err)
 	}
 
 	// Create new k8s client
@@ -99,7 +88,7 @@ func (kl *KubeListener) Run() {
 	}
 	kubeClient, err := kclient.NewClient(kubeConfig)
 	if err != nil {
-		glog.Fatal(err)
+		log.Fatal(err)
 	}
 
 	// Flow control channels
@@ -128,9 +117,9 @@ func (kl *KubeListener) Run() {
 	for {
 		select {
 		case err := <-errChan:
-			glog.Error(err)
+			log.Error(err)
 		case s := <-signalChan:
-			glog.Infof("Captured %v. Exiting...", s)
+			log.Infof("Captured %v. Exiting...", s)
 			close(doneChan)
 		case <-doneChan:
 			os.Exit(0)
@@ -140,7 +129,7 @@ func (kl *KubeListener) Run() {
 	/*
 	// create kubelistener instance
 	kl := kubelistener{config: config}
-	
+
 	// open add events files
 	if config.AddEventsFile == "" {
 		glog.Warningf("Ignoring 'add' events because --add-events-file wasn't provided.")
@@ -151,7 +140,7 @@ func (kl *KubeListener) Run() {
 			kl.addWriter = w
 		}
 	}
-	
+
 	// open update events files
 	if config.UpdateEventsFile == "" {
 		glog.Warningf("Ignoring 'update' events because --update-events-file wasn't provided.")
@@ -162,7 +151,7 @@ func (kl *KubeListener) Run() {
 			kl.updateWriter = w
 		}
 	}
-	
+
 	// open delete events files
 	if config.DeleteEventsFile == "" {
 		glog.Warningf("Ignoring 'delete' events because --delete-events-file wasn't provided.")

@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glerchundi/glog"
 	"golang.org/x/net/context"
 	"golang.org/x/net/context/ctxhttp"
 	"golang.org/x/net/websocket"
+	log "github.com/glerchundi/logrus"
 	kapi "github.com/glerchundi/kubelistener/pkg/client/api/v1"
 	kruntime "github.com/glerchundi/kubelistener/pkg/client/runtime"
 )
@@ -106,7 +106,7 @@ func NewClient(config *ClientConfig) (*Client, error) {
 
 	masterURL := config.MasterURL
 	if masterURL == "" {
-		glog.Warning("Master URL not set, discovering k8s service through env vars KUBERNETES_SERVICE{HOST,PORT}...")
+		log.Warn("Master URL not set, discovering k8s service through env vars KUBERNETES_SERVICE{HOST,PORT}...")
 		k8sSvcHost := os.Getenv("KUBERNETES_SERVICE_HOST")
 		if k8sSvcHost == "" {
 			return nil, fmt.Errorf("empty KUBERNETES_SERVICE_HOST environment variable")
