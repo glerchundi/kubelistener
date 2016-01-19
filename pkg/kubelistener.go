@@ -92,7 +92,8 @@ func (kl *KubeListener) Run() {
 	}
 
 	// Flow control channels
-	stopChan := make(<-chan struct {} )
+	recvChan := make(chan interface{}, 100)
+	stopChan := make(<-chan struct {})
 	doneChan := make(chan bool)
 	errChan := make(chan error, 10)
 
@@ -102,12 +103,14 @@ func (kl *KubeListener) Run() {
 		Resource: kl.config.Resource,
 		Selector: kl.config.Selector,
 		ResyncInterval: kl.config.ResyncInterval,
-		Processor: process,
 	}
 	i, err := kubeClient.NewInformer(
-		informerConfig,
+		informerConfig, recvChan,
 		stopChan, doneChan, errChan,
 	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	go i.Run()
 
@@ -116,6 +119,8 @@ func (kl *KubeListener) Run() {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	for {
 		select {
+		case v := <-recvChan:
+			log.Infof("%v", v)
 		case err := <-errChan:
 			log.Error(err)
 		case s := <-signalChan:

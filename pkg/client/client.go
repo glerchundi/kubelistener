@@ -63,7 +63,7 @@ type Informer struct {
 	config *InformerConfig
 	// inter-routine comm.
 	rc resourceCreator
-	funnelChan chan interface{}
+	recvChan chan<- interface{}
 	// control flow channels
 	stopChan <-chan struct{}
 	doneChan chan bool
@@ -75,7 +75,6 @@ type InformerConfig struct {
 	Resource string
 	Selector string
 	ResyncInterval time.Duration
-	Processor func(interface{})
 }
 
 type resourceCreator interface {
@@ -176,11 +175,11 @@ func NewClient(config *ClientConfig) (*Client, error) {
 	return client, nil
 }
 
-func (c *Client) NewInformer(config *InformerConfig,
+func (c *Client) NewInformer(config *InformerConfig, recvChan chan<- interface{},
                              stopChan <-chan struct{}, doneChan chan bool, errChan chan error) (*Informer, error) {
-	// Check if a processor was provided
-	if config.Processor == nil {
-		return nil, fmt.Errorf("no processor was provided")
+	// Check if a channel was provided
+	if recvChan == nil {
+		return nil, fmt.Errorf("no recv chan was provided")
 	}
 
 	// Use POD_NAMESPACE as default value or fallback to "default"
@@ -225,7 +224,7 @@ func (c *Client) NewInformer(config *InformerConfig,
 		wsConfig,
 		config,
 		resourceCreator,
-		make(chan interface{}, 100),
+		recvChan,
 		stopChan, doneChan, errChan,
 	}, nil
 }
@@ -265,7 +264,9 @@ func (i *Informer) watch() {
 				i.errChan <- err
 				return
 			}
-			i.funnelChan <- we
+
+			// notify watch event
+			i.notify(we)
 		}
 	}
 }
@@ -297,14 +298,25 @@ func (i *Informer) list() {
 			return
 		}
 
-		i.funnelChan <- v
+		// notify list
+		i.notify(v)
 
+		// wait until resync is required
 		select {
 		case <-i.stopChan:
 			break
 		case <-time.After(i.config.ResyncInterval):
 			continue
 		}
+	}
+}
+
+func (i *Informer) notify(v interface{}) {
+	// send but do not block for it
+	select {
+	case i.recvChan <- v:
+	default:
+		log.Warnf("unable to notify item, discarding value (%v)", v)
 	}
 }
 
@@ -325,18 +337,6 @@ func (i *Informer) Run() {
 	go func() {
 		defer wg.Done()
 		i.list()
-	}()
-
-	// serializer channel
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case v := <-i.funnelChan:
-				i.config.Processor(v)
-			}
-		}
 	}()
 
 	// wait until both finished

@@ -1,0 +1,7 @@
+package: .
+import:
+- package: github.com/Sirupsen/logrus
+  version: f7f79f729e0fbe2fcc061db48a9ba0263f588252
+- package: github.com/stretchr/testify
+  subpackages:
+  - /assert
