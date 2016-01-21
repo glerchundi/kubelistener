@@ -1,9 +1,9 @@
 package: github.com/glerchundi/kubelistener
 import:
-- package: github.com/spf13/pflag
-- package: github.com/glerchundi/logrus
-  version: 39dd9c24b9e7561aa92cc6f54b5f4fbad5b2df17
+- package: speter.net/go/exp/math/dec/inf
 - package: golang.org/x/net
   subpackages:
-  - /context
-- package: speter.net/go/exp/math/dec/inf
+  - /context/ctxhttp
+- package: github.com/gorilla/websocket
+- package: github.com/spf13/pflag
+- package: github.com/glerchundi/logrus

@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"golang.org/x/net/context"
 	"golang.org/x/net/context/ctxhttp"
-	"golang.org/x/net/websocket"
 	log "github.com/glerchundi/logrus"
 	kapi "github.com/glerchundi/kubelistener/pkg/client/api/v1"
 	kruntime "github.com/glerchundi/kubelistener/pkg/client/runtime"
@@ -25,7 +25,7 @@ import (
 type Client struct {
 	// derived config
 	tls *tls.Config
-	headers http.Header
+	reqHeader http.Header
 	baseURL string
 	// user-provided configuration
 	config *ClientConfig
@@ -58,7 +58,9 @@ type Informer struct {
 	// derived config
 	httpClient *http.Client
 	httpReq *http.Request
-	wsConfig *websocket.Config
+	wsURL string
+	wsDialer *websocket.Dialer
+	wsHeader http.Header
 	// user-provided configuration
 	config *InformerConfig
 	// inter-routine comm.
@@ -98,6 +100,16 @@ var resourceCreatorMap = map[string]resourceCreator {
 	"pods": &podCreator{},
 	"replicationcontrollers": &replicationControllerCreator{},
 	"services": &serviceCreator{},
+}
+
+func copyHeader(hIn http.Header) http.Header {
+	hOut := make(http.Header, len(hIn))
+	for k, vv := range hIn {
+		vv2 := make([]string, len(vv))
+		copy(vv2, vv)
+		hOut[k] = vv2
+	}
+	return hOut
 }
 
 func NewClient(config *ClientConfig) (*Client, error) {
@@ -154,12 +166,12 @@ func NewClient(config *ClientConfig) (*Client, error) {
 		}
 		client.tls.Certificates = []tls.Certificate{cert}
 	case *TokenAuth:
-		client.headers = http.Header {
+		client.reqHeader = http.Header {
 			"Authorization": { fmt.Sprintf("Bearer %s", auth.Token) },
 		}
 	case *UsernameAndPasswordAuth:
 		encodedAuth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprint("%s:%s", auth.Username, auth.Password)))
-		client.headers = http.Header {
+		client.reqHeader = http.Header {
 			"Authorization": { fmt.Sprintf("Basic %s", encodedAuth) },
 		}
 	default:
@@ -203,15 +215,16 @@ func (c *Client) NewInformer(config *InformerConfig, recvChan chan<- interface{}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: GET %s : %v", httpURL, err)
 	}
-	httpReq.Header = c.headers
+	httpReq.Header = copyHeader(c.reqHeader)
 
-	// WebSocket Client
+	// WebSocket Dialer
 	wsURL := c.getResourcesURL("ws", namespace, config.Resource, true)
-	wsConfig, err := websocket.NewConfig(wsURL, "http://localhost"); if err != nil {
-		return nil, err
+	wsDialer := &websocket.Dialer{
+		Proxy: http.ProxyFromEnvironment,
+		TLSClientConfig: c.tls,
 	}
-	wsConfig.TlsConfig = c.tls
-	wsConfig.Header = c.headers
+	wsHeader := copyHeader(c.reqHeader)
+	wsHeader.Add("Origin", "http://localhost")
 
 	resourceCreator, ok := resourceCreatorMap[config.Resource]
 	if !ok {
@@ -221,7 +234,7 @@ func (c *Client) NewInformer(config *InformerConfig, recvChan chan<- interface{}
 	// Return informer
 	return &Informer{
 		httpClient, httpReq,
-		wsConfig,
+		wsURL, wsDialer, wsHeader,
 		config,
 		resourceCreator,
 		recvChan,
@@ -247,26 +260,72 @@ func (c *Client) getResourcesURL(schemePrefix, namespace, resource string, watch
 }
 
 func (i *Informer) watch() {
-	wsConn, err := websocket.DialConfig(i.wsConfig)
-	if err != nil {
-		i.errChan <- err
-		return
+	const (
+		// Time allowed to write a message to the peer.
+		writeWait = 10 * time.Second
+		// Time allowed to read the next pong message from the peer.
+		pongWait = 10 * time.Second
+		// Send pings to peer with this period. Must be less than pongWait.
+		pingPeriod = (pongWait * 9) / 10
+	)
+
+	// write writes a message with the given message type and payload.
+	writeFn := func(ws *websocket.Conn, mt int, payload []byte) error {
+		ws.SetWriteDeadline(time.Now().Add(writeWait))
+		return ws.WriteMessage(mt, payload)
 	}
 
 	for {
-		select {
-		case <-i.stopChan:
-			break
-		default:
-			v := i.rc.item()
-			we := &kapi.WatchEvent{Object:v}
-			if err := websocket.JSON.Receive(wsConn, &we); err != nil {
-				i.errChan <- err
-				return
+		ws, resp, err := i.wsDialer.Dial(i.wsURL, i.wsHeader)
+		if err != nil {
+			if err == websocket.ErrBadHandshake {
+				err = fmt.Errorf("handshake failed with status %d", resp.StatusCode)
 			}
+			i.notifyError(err)
+			continue
+		}
 
-			// notify watch event
-			i.notify(we)
+		// TODO: Look which is the max resource limit in kubernetes (the json serialized one)
+		//ws.SetReadLimit(maxResourceSize)
+		ws.SetReadDeadline(time.Now().Add(pongWait))
+		ws.SetPongHandler(func(string) error {
+			ws.SetReadDeadline(time.Now().Add(pongWait)); return nil
+		})
+
+		// this routine pumps messages from the hub to the websocket connection.
+		go func() {
+			ticker := time.NewTicker(pingPeriod)
+			defer func() {
+				ticker.Stop()
+				ws.Close()
+			}()
+			for {
+				select {
+				case <-ticker.C:
+					if err := writeFn(ws, websocket.PingMessage, []byte{}); err != nil {
+						return
+					}
+				}
+			}
+		}()
+
+		L: for {
+			select {
+			case <-i.stopChan:
+				break
+			default:
+				v := i.rc.item()
+				we := &kapi.WatchEvent{Object:v}
+				if err := ws.ReadJSON(&we); err != nil {
+					if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+						i.notifyError(err)
+					}
+					break L
+				} else {
+					// notify watch event
+					i.notify(we)
+				}
+			}
 		}
 	}
 }
@@ -277,25 +336,25 @@ func (i *Informer) list() {
 		res, err := ctxhttp.Do(context.Background(), i.httpClient, i.httpReq)
 		if err != nil {
 			i.errChan <- fmt.Errorf("failed to make request: GET %s: %v", httpURL, err)
-			return
+			continue
 		}
 
 		body, err := ioutil.ReadAll(res.Body)
 		res.Body.Close()
 		if err != nil {
-			i.errChan <- fmt.Errorf("failed to read request body for GET %s: %v", httpURL, err)
-			return
+			i.notifyError(fmt.Errorf("failed to read request body for GET %s: %v", httpURL, err))
+			continue
 		}
 
 		if res.StatusCode != http.StatusOK {
-			i.errChan <- fmt.Errorf("http error %d GET %q: %s: %v", res.StatusCode, httpURL, string(body), err)
-			return
+			i.notifyError(fmt.Errorf("http error %d GET %q: %s: %v", res.StatusCode, httpURL, string(body), err))
+			continue
 		}
 
 		v := i.rc.list()
 		if err := json.Unmarshal(body, &v); err != nil {
-			i.errChan <- fmt.Errorf("failed to decode list of pod resources: %v", err)
-			return
+			i.notifyError(fmt.Errorf("failed to decode list of pod resources: %v", err))
+			continue
 		}
 
 		// notify list
@@ -316,8 +375,20 @@ func (i *Informer) notify(v interface{}) {
 	select {
 	case i.recvChan <- v:
 	default:
-		log.Warnf("unable to notify item, discarding value (%v)", v)
+		log.Warnf("unable to notify item, discarding it (%v)", v)
 	}
+}
+
+func (i *Informer) notifyError(err error) {
+	// send but do not block for it
+	select {
+	case i.errChan <- err:
+	default:
+		log.Warnf("unable to notify error, discarding it (%v)", err)
+	}
+
+	// Prevent errors from consuming all resources.
+	time.Sleep(1 * time.Second)
 }
 
 func (i *Informer) Run() {

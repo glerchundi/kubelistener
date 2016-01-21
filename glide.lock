@@ -1,5 +1,5 @@
-hash: 3798b43dfc3fec47df9f00dc7ec98c383e076c6ef6ae046bf12331d7fdfb2d6c
-updated: 2016-01-19T12:34:29.011798532+01:00
+hash: e5ea4629f5149c92855ab51dc9a4e14d6cb7c7595915fb948a77b9d72940a92d
+updated: 2016-01-21T13:17:55.516714954+01:00
 imports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21
@@ -7,6 +7,8 @@ imports:
   - spew
 - name: github.com/glerchundi/logrus
   version: 39dd9c24b9e7561aa92cc6f54b5f4fbad5b2df17
+- name: github.com/gorilla/websocket
+  version: 53c06dc38e73a23a6b24f28e6e07a33eb2344940
 - name: github.com/pmezard/go-difflib
   version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
   subpackages:
@@ -14,7 +16,7 @@ imports:
 - name: github.com/Sirupsen/logrus
   version: f7f79f729e0fbe2fcc061db48a9ba0263f588252
 - name: github.com/spf13/pflag
-  version: 7f60f83a2c81bc3c3c0d5297f61ddfa68da9d3b7
+  version: 53c06dc38e73a23a6b24f28e6e07a33eb2344940
 - name: github.com/stretchr/objx
   version: cbeaeb16a013161a98496fad62933b1d21786672
 - name: github.com/stretchr/testify
@@ -22,17 +24,19 @@ imports:
   subpackages:
   - /assert
 - name: golang.org/x/crypto
-  version: 3760e016850398b85094c4c99e955b8c3dea5711
+  version: 53c06dc38e73a23a6b24f28e6e07a33eb2344940
 - name: golang.org/x/net
-  version: 72aa00c6241a8013dc9b040abb45f57edbe73945
+  version: 53c06dc38e73a23a6b24f28e6e07a33eb2344940
   subpackages:
-  - /context
+  - /context/ctxhttp
 - name: golang.org/x/text
-  version: cf4986612c83df6c55578ba198316d1684a9a287
+  version: 53c06dc38e73a23a6b24f28e6e07a33eb2344940
 - name: gopkg.in/airbrake/gobrake.v2
   version: c9d51adc624b5cc4c1bf8de730a09af4878ffe2d
+  repo: https://gopkg.in/airbrake/gobrake.v2
 - name: gopkg.in/gemnasium/logrus-airbrake-hook.v2
   version: 31e6fd4bd5a98d8ee7673d24bc54ec73c31810dd
+  repo: https://gopkg.in/gemnasium/logrus-airbrake-hook.v2
 - name: speter.net/go/exp/math/dec/inf
-  version: 42ca6cd68aa922bc3f32f1e056e61b65945d9ad7
+  version: 53c06dc38e73a23a6b24f28e6e07a33eb2344940
 devImports: []
