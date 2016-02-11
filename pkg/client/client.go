@@ -335,7 +335,7 @@ func (i *Informer) list() {
 	for {
 		res, err := ctxhttp.Do(context.Background(), i.httpClient, i.httpReq)
 		if err != nil {
-			i.errChan <- fmt.Errorf("failed to make request: GET %s: %v", httpURL, err)
+			i.notifyError(fmt.Errorf("failed to make request: GET %s: %v", httpURL, err))
 			continue
 		}
 
